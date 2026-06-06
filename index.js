@@ -3,6 +3,11 @@ const { Telegraf } = require('telegraf');
 const cron = require('node-cron');
 const db = require('./database');
 const calendar = require('./calendar');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -190,7 +195,7 @@ cron.schedule('0 8 * * *', async () => {
     bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
       .catch(e => console.error(`Failed to send morning msg to ${chatId}`));
   });
-});
+}, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 2. Nhắc nhở cuối ngày làm việc (17:30 chiều mỗi ngày)
 cron.schedule('30 17 * * *', async () => {
@@ -200,7 +205,7 @@ cron.schedule('30 17 * * *', async () => {
     bot.telegram.sendMessage(chatId, '🌇 Đã 5h30 chiều! Bạn nhớ tổng kết lại các công việc trong ngày và đánh dấu xong (lệnh /done) nhé. Nghỉ ngơi thôi nào!')
       .catch(e => console.error(`Failed to send evening msg to ${chatId}`));
   });
-});
+}, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 3. Nhắc nhở sự kiện sát giờ (chạy kiểm tra mỗi phút)
 cron.schedule('* * * * *', async () => {
@@ -211,7 +216,7 @@ cron.schedule('* * * * *', async () => {
   if (!icalUrl) return;
 
   const events = await calendar.getTodaysEvents(icalUrl);
-  const now = require('dayjs')();
+  const now = dayjs().tz('Asia/Ho_Chi_Minh');
 
   events.forEach(e => {
     // Tách giờ và phút của sự kiện
@@ -234,7 +239,7 @@ cron.schedule('* * * * *', async () => {
       });
     }
   });
-});
+}, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 4. Báo cáo tự động vào Group (9:00 sáng mỗi ngày)
 cron.schedule('0 9 * * *', async () => {
@@ -247,11 +252,11 @@ cron.schedule('0 9 * * *', async () => {
     bot.telegram.sendMessage(chatId, reportMsg, { parse_mode: 'HTML' })
       .catch(e => console.error('Lỗi khi gửi báo cáo vào group:', e));
   });
-});
+}, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 5. Nhắc nhở Task theo mốc giờ hẹn (chạy mỗi phút)
 cron.schedule('* * * * *', async () => {
-  const now = require('dayjs')();
+  const now = dayjs().tz('Asia/Ho_Chi_Minh');
   const currentHHMM = now.format('HH:mm');
 
   try {
@@ -281,7 +286,7 @@ cron.schedule('* * * * *', async () => {
   } catch (err) {
     console.error('Lỗi cron nhắc task theo giờ:', err);
   }
-});
+}, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // --- CHẠY BOT ---
 const startBot = async () => {

@@ -1,5 +1,9 @@
 const ical = require('node-ical');
 const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Hàm lấy các sự kiện của ngày hôm nay từ iCal link
 const getTodaysEvents = async (icalUrl) => {
@@ -7,15 +11,15 @@ const getTodaysEvents = async (icalUrl) => {
   
   try {
     const events = await ical.async.fromURL(icalUrl);
-    const today = dayjs();
+    const today = dayjs().tz('Asia/Ho_Chi_Minh');
     const todaysEvents = [];
 
     for (const k in events) {
       if (events.hasOwnProperty(k)) {
         const ev = events[k];
         if (ev.type === 'VEVENT') {
-          const startDate = dayjs(ev.start);
-          const endDate = dayjs(ev.end);
+          const startDate = dayjs(ev.start).tz('Asia/Ho_Chi_Minh');
+          const endDate = dayjs(ev.end).tz('Asia/Ho_Chi_Minh');
           
           // Kiểm tra xem sự kiện có diễn ra trong ngày hôm nay không
           if (today.isSame(startDate, 'day') || (today.isAfter(startDate, 'day') && today.isBefore(endDate, 'day'))) {
