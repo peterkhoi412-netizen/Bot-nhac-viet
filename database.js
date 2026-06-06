@@ -15,7 +15,11 @@ const connectDB = async (uri) => {
 const userSchema = new mongoose.Schema({ chat_id: { type: String, unique: true } });
 const User = mongoose.model('User', userSchema);
 
-const groupSchema = new mongoose.Schema({ chat_id: { type: String, unique: true } });
+const groupSchema = new mongoose.Schema({ 
+  chat_id: { type: String, unique: true },
+  title: { type: String, default: 'Nhóm' },
+  alias_id: { type: Number, unique: true }
+});
 const Group = mongoose.model('Group', groupSchema);
 
 const taskSchema = new mongoose.Schema({
@@ -42,9 +46,23 @@ const getAllUsers = async () => {
   return users.map(u => u.chat_id);
 };
 
-const saveGroup = async (chatId) => {
+const saveGroup = async (chatId, title = 'Nhóm làm việc') => {
   try {
-    await Group.updateOne({ chat_id: chatId }, { chat_id: chatId }, { upsert: true });
+    const existing = await Group.findOne({ chat_id: chatId });
+    if (existing) {
+      if (existing.title !== title) {
+        await Group.updateOne({ chat_id: chatId }, { title: title });
+      }
+      return existing;
+    }
+    
+    // Tự động tăng alias_id cho nhóm mới
+    const lastGroup = await Group.findOne().sort({ alias_id: -1 });
+    const nextAliasId = (lastGroup && lastGroup.alias_id) ? lastGroup.alias_id + 1 : 1;
+    
+    const newGroup = new Group({ chat_id: chatId, title: title, alias_id: nextAliasId });
+    await newGroup.save();
+    return newGroup;
   } catch (err) {
     console.error('Lỗi saveGroup:', err);
   }
@@ -53,6 +71,14 @@ const saveGroup = async (chatId) => {
 const getAllGroups = async () => {
   const groups = await Group.find({});
   return groups.map(g => g.chat_id);
+};
+
+const getGroupList = async () => {
+  return await Group.find({}).sort({ alias_id: 1 });
+};
+
+const getGroupById = async (aliasId) => {
+  return await Group.findOne({ alias_id: aliasId });
 };
 
 const addTask = async (chatId, taskText, reminderTime = null) => {
@@ -91,6 +117,8 @@ module.exports = {
   getAllUsers,
   saveGroup,
   getAllGroups,
+  getGroupList,
+  getGroupById,
   addTask,
   getPendingTasks,
   getTasksByReminderTime,

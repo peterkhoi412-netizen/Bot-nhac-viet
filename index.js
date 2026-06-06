@@ -20,11 +20,73 @@ bot.start(async (ctx) => {
 
   if (chatType === 'private') {
     await db.saveUser(chatId);
-    ctx.reply('Chào bạn! Tôi là Bot Nhắc Việc. \n\nCác lệnh khả dụng:\n- /add <nội dung>: Thêm công việc\n- /list: Xem việc chưa làm\n- /done <id>: Đánh dấu xong\n\nTôi sẽ tự động nhắc lịch và báo giờ làm việc hàng ngày nhé!');
+    ctx.reply('Chào bạn! Tôi là Bot Nhắc Việc. \n\nCác lệnh khả dụng:\n- /add <nội dung>: Thêm công việc\n- /list: Xem việc chưa làm\n- /done <id>: Đánh dấu xong\n- /groups: Xem danh sách Nhóm\n- /addto <mã_nhóm> <giờ> <nội dung>: Giao việc vào Nhóm\n\nTôi sẽ tự động nhắc lịch và báo giờ làm việc hàng ngày nhé!');
   } else {
-    await db.saveGroup(chatId);
-    ctx.reply('Chào cả nhà! Bot đã ghi nhận Group này để gửi báo cáo định kỳ (Các lịch cá nhân sẽ không bị gửi vào đây).');
+    const groupData = await db.saveGroup(chatId, ctx.chat.title);
+    ctx.reply(`Đã kích hoạt Bot cho nhóm: ${ctx.chat.title || 'Nhóm này'}\nMã số của Nhóm này là: ${groupData.alias_id}\n\nBạn có thể ra lệnh từ trung tâm chỉ huy bằng cách gõ:\n/addto ${groupData.alias_id} <giờ> <nội dung>`);
   }
+});
+
+// Lệnh /groups: Xem danh sách các nhóm đã kết nối
+bot.command('groups', async (ctx) => {
+  const groups = await db.getGroupList();
+  if (groups.length === 0) return ctx.reply('Chưa có nhóm nào được kết nối.');
+  let msg = '🏢 <b>DANH SÁCH CÁC NHÓM ĐÃ KẾT NỐI</b>\n\n';
+  groups.forEach(g => {
+    msg += `Mã số: <b>${g.alias_id}</b> - Tên: ${g.title}\n`;
+  });
+  msg += '\n👉 Để giao việc, hãy dùng lệnh:\n<code>/addto &lt;Mã số&gt; &lt;Giờ&gt; &lt;Nội dung&gt;</code>';
+  ctx.replyWithHTML(msg);
+});
+
+// Lệnh /addto: Thêm task vào group khác
+bot.command('addto', async (ctx) => {
+  const text = ctx.message.text.replace('/addto', '').trim();
+  const match = text.match(/^(\d+)\s+(.+)$/s); // match group ID and the rest (including newlines)
+  if (!match) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /addto <Mã Nhóm> <Nội dung>\nVí dụ: /addto 1 16:00 Báo cáo');
+  }
+
+  const targetAliasId = parseInt(match[1]);
+  const restText = match[2];
+
+  const targetGroup = await db.getGroupById(targetAliasId);
+  if (!targetGroup) {
+    return ctx.reply(`Không tìm thấy nhóm nào có mã số ${targetAliasId}. Gõ /groups để xem danh sách mã nhóm.`);
+  }
+
+  const targetChatId = targetGroup.chat_id;
+
+  // Lọc ra tất cả các thời gian (vd: 16:00, 16h00) có trong tin nhắn
+  const timeRegex = /\b([01]?[0-9]|2[0-3])[:hH]([0-5][0-9])\b/g;
+  let reminderTimes = [];
+  let matchTime;
+  while ((matchTime = timeRegex.exec(restText)) !== null) {
+    const hh = matchTime[1].padStart(2, '0');
+    const mm = matchTime[2];
+    reminderTimes.push(`${hh}:${mm}`);
+  }
+
+  // Chia tin nhắn thành nhiều dòng, mỗi dòng là một công việc
+  const lines = restText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  // Nếu không có thời gian nào được ghi ra, lưu task không hẹn giờ
+  if (reminderTimes.length === 0) {
+    for (let line of lines) {
+      await db.addTask(targetChatId, line, null);
+    }
+    return ctx.reply(`✅ Đã thêm ${lines.length} công việc vào nhóm [${targetGroup.title}]. (Không hẹn giờ nhắc)`);
+  }
+
+  // Nếu có hẹn giờ, tạo task riêng cho từng mốc thời gian
+  let msg = `✅ Đã thêm các công việc sau vào nhóm [${targetGroup.title}]:\n`;
+  for (let time of reminderTimes) {
+    for (let line of lines) {
+      await db.addTask(targetChatId, line, time);
+    }
+    msg += `- ⏰ ${time}: ${lines.join(', ')}\n`;
+  }
+  ctx.reply(msg);
 });
 
 // Lệnh /add: Thêm task mới (hỗ trợ nhiều thời gian và nhiều dòng)
