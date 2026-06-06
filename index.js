@@ -23,7 +23,7 @@ bot.start(async (ctx) => {
     ctx.reply('Chào bạn! Tôi là Bot Nhắc Việc. \n\nCác lệnh khả dụng:\n- /add <nội dung>: Thêm công việc\n- /list: Xem việc chưa làm\n- /done <id>: Đánh dấu xong\n- /groups: Xem danh sách Nhóm\n- /addto <mã_nhóm> <giờ> <nội dung>: Giao việc vào Nhóm\n\nTôi sẽ tự động nhắc lịch và báo giờ làm việc hàng ngày nhé!');
   } else {
     const groupData = await db.saveGroup(chatId, ctx.chat.title);
-    ctx.reply(`Đã kích hoạt Bot cho nhóm: ${ctx.chat.title || 'Nhóm này'}\nMã số của Nhóm này là: ${groupData.alias_id}\n\nBạn có thể ra lệnh từ trung tâm chỉ huy bằng cách gõ:\n/addto ${groupData.alias_id} <giờ> <nội dung>`);
+    ctx.reply(`Đã kích hoạt Bot cho nhóm: ${ctx.chat.title || 'Nhóm này'}\nMã số của Nhóm này là: ${groupData.alias_id}`);
   }
 });
 
