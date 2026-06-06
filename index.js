@@ -299,6 +299,13 @@ const startBot = async () => {
   });
 };
 
+// --- MÁY CHỦ ẢO CHO RENDER ---
+const http = require('http');
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Bot is running 24/7');
+}).listen(process.env.PORT || 3000);
+
 startBot();
 
 // Bắt lỗi để bot không bị crash (tùy chọn)
