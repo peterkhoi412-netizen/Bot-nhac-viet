@@ -1,0 +1,17 @@
+{
+  "name": "telegram-reminder-bot",
+  "version": "1.0.0",
+  "description": "A personal Telegram bot to remind tasks and Google Calendar events",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.10",
+    "dotenv": "^16.3.1",
+    "mongoose": "^9.6.3",
+    "node-cron": "^3.0.3",
+    "node-ical": "^0.17.1",
+    "telegraf": "^4.15.3"
+  }
+}
