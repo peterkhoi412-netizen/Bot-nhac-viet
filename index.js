@@ -11,6 +11,38 @@ dayjs.extend(timezone);
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// --- XÁC THỰC QUYỀN TRUY CẬP (CHỈ ADMIN) ---
+bot.use(async (ctx, next) => {
+  const adminId = process.env.ADMIN_ID;
+  
+  // Cho phép dùng lệnh /myid để xem ID dù chưa cấu hình ADMIN_ID
+  if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/myid')) {
+    return next();
+  }
+
+  // Nếu chưa cấu hình ADMIN_ID, tạm thời cho phép tất cả để setup
+  if (!adminId) {
+    return next();
+  }
+
+  // Nếu người nhắn KHÔNG PHẢI là Admin
+  if (ctx.from && ctx.from.id.toString() !== adminId) {
+    // Chỉ chặn nếu họ cố tình gõ lệnh (bắt đầu bằng /)
+    if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
+      return ctx.reply('Em là Bót ngoan xink iu của anh Khui và chỉ nghe nời ảnh thoi ạ hihi <3');
+    }
+    // Các tin nhắn chat bình thường trong group thì bơ đi
+    return;
+  }
+
+  return next();
+});
+
+// Lệnh hỗ trợ Admin lấy ID
+bot.command('myid', (ctx) => {
+  ctx.reply(`Telegram ID của anh là: ${ctx.from.id}\nAnh hãy copy dãy số này và thêm vào file .env nhé:\nADMIN_ID=${ctx.from.id}`);
+});
+
 // --- CÁC LỆNH CỦA BOT ---
 
 // Lệnh /start: Lưu người dùng hoặc group vào danh sách nhận thông báo
@@ -340,7 +372,11 @@ cron.schedule('* * * * *', async () => {
         const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
         msg += `<b>${displayIdx}.</b> ${t.task}\n`;
       });
-      msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhé!`;
+      
+      // Chỉ hiện hướng dẫn /done nếu là chat cá nhân (ID không bắt đầu bằng dấu trừ)
+      if (!chatId.toString().startsWith('-')) {
+        msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhé!`;
+      }
 
       bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
         .catch(err => console.error('Lỗi khi gửi nhắc task:', err));
