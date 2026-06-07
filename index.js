@@ -293,7 +293,13 @@ bot.command('testcal', async (ctx) => {
     msg += `📝 <b>Mô tả:</b> ${e.description ? '\n' + e.description : 'Không có'}\n\n`;
   });
 
-  ctx.replyWithHTML(msg);
+  try {
+    await ctx.replyWithHTML(msg);
+  } catch (err) {
+    console.error('Lỗi khi gửi lịch:', err.message);
+    // Fallback: Gửi tin nhắn không có định dạng HTML nếu bị lỗi parse HTML
+    ctx.reply('🛠 Kiểm tra dữ liệu sự kiện hôm nay (Không định dạng do lỗi ký tự đặc biệt):\n\n' + msg.replace(/<[^>]*>?/gm, ''));
+  }
 });
 
 // --- LÊN LỊCH TỰ ĐỘNG (CRON JOBS) ---

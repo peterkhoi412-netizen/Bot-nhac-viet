@@ -61,6 +61,17 @@ const getTodaysEvents = async () => {
     const events = res.data.items || [];
     const formattedEvents = [];
 
+    const escapeHtml = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]*>?/gm, '') // Xóa các thẻ HTML
+        .replace(/&/g, '&amp;')    // Bắt buộc cho Telegram
+        .replace(/</g, '&lt;')     // Bắt buộc cho Telegram
+        .replace(/>/g, '&gt;');    // Bắt buộc cho Telegram
+    };
+
     events.forEach(ev => {
       // Xác định đây là sự kiện Cả ngày hay có giờ cụ thể
       let start, end, datetype;
@@ -80,9 +91,9 @@ const getTodaysEvents = async () => {
       }
 
       formattedEvents.push({
-        summary: ev.summary || 'Không có tiêu đề',
-        description: ev.description || '',
-        location: ev.location || '',
+        summary: escapeHtml(ev.summary) || 'Không có tiêu đề',
+        description: escapeHtml(ev.description) || '',
+        location: escapeHtml(ev.location) || '',
         url: ev.htmlLink || '', // Lấy link Google Calendar chính chủ
         start,
         end,
