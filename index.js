@@ -286,11 +286,12 @@ bot.command('testcal', async (ctx) => {
 
   let msg = '🛠 <b>Kiểm tra dữ liệu sự kiện hôm nay:</b>\n\n';
   events.forEach(e => {
+    const timeStr = e.start === 'Cả ngày' ? 'Cả ngày' : `${e.start} - ${e.end}`;
     msg += `📌 <b>Sự kiện:</b> ${e.summary}\n`;
-    msg += `🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
+    msg += `🕒 <b>Thời gian:</b> ${timeStr}\n`;
     msg += `📍 <b>Địa điểm:</b> ${e.location || 'Không có'}\n`;
     msg += `🔗 <b>Link:</b> ${e.url || 'Không có'}\n`;
-    msg += `📝 <b>Mô tả:</b> ${e.description ? '\\n' + e.description : 'Không có'}\n\n`;
+    msg += `📝 <b>Mô tả:</b> ${e.description ? '\n' + e.description : 'Không có'}\n\n`;
   });
 
   ctx.replyWithHTML(msg);
@@ -310,7 +311,8 @@ cron.schedule('0 8 * * *', async () => {
   if (events.length > 0) {
     msg += '📅 <b>Lịch trình của A/C hôm nay nè:</b>\n';
     events.forEach(e => {
-      msg += `- ${e.start} - ${e.end}: <b>${e.summary}</b>\n`;
+      const timeStr = e.start === 'Cả ngày' ? 'Cả ngày' : `${e.start} - ${e.end}`;
+      msg += `- ${timeStr}: <b>${e.summary}</b>\n`;
       if (e.location) msg += `  📍 <b>Địa điểm:</b> ${e.location}\n`;
       if (e.url) msg += `  🔗 <b>Link:</b> ${e.url}\n`;
     });
@@ -367,6 +369,7 @@ cron.schedule('* * * * *', async () => {
   }
 
   events.forEach(e => {
+    if (e.start === 'Cả ngày') return; // Bỏ qua sự kiện cả ngày khi kiểm tra sát giờ
     const [hours, minutes] = e.start.split(':');
     const eventTime = now.clone().hour(parseInt(hours)).minute(parseInt(minutes)).second(0).millisecond(0);
     const diffMinutes = eventTime.diff(now.second(0).millisecond(0), 'minute');
