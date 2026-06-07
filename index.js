@@ -272,13 +272,12 @@ bot.command('done', async (ctx) => {
 
 // Lệnh /testcal: Kiểm tra Lịch ngay lập tức
 bot.command('testcal', async (ctx) => {
-  const icalUrl = process.env.CALENDAR_ICAL_URL;
-  if (!icalUrl) {
-    return ctx.reply('Chưa có link Lịch trong file .env');
+  if (!process.env.GOOGLE_CREDENTIALS_BASE64 || !process.env.CALENDAR_ID) {
+    return ctx.reply('Chưa cấu hình Google Calendar API trong file .env (cần GOOGLE_CREDENTIALS_BASE64 và CALENDAR_ID)');
   }
   
-  ctx.reply('Đang tải dữ liệu lịch Google...');
-  const events = await calendar.getTodaysEvents(icalUrl);
+  ctx.reply('Đang tải dữ liệu lịch Google bằng API (Real-time)...');
+  const events = await calendar.getTodaysEvents();
   
   if (events.length === 0) {
     return ctx.reply('Không tìm thấy sự kiện nào trong ngày hôm nay trên Lịch của bạn.');
@@ -303,8 +302,7 @@ cron.schedule('0 8 * * *', async () => {
   const users = await db.getAllUsers();
   if (users.length === 0) return;
 
-  const icalUrl = process.env.CALENDAR_ICAL_URL;
-  const events = await calendar.getTodaysEvents(icalUrl);
+  const events = await calendar.getTodaysEvents();
   
   let msg = '🌅 <b>Chào buổi sáng tốt lành! Chúc A/C một ngày làm việc siêu năng suất nhen 💕</b>\n\n';
   
@@ -357,10 +355,9 @@ cron.schedule('* * * * *', async () => {
   const users = await db.getAllUsers();
   if (users.length === 0) return;
 
-  const icalUrl = process.env.CALENDAR_ICAL_URL;
-  if (!icalUrl) return;
+  if (!process.env.GOOGLE_CREDENTIALS_BASE64 || !process.env.CALENDAR_ID) return;
 
-  const events = await calendar.getTodaysEvents(icalUrl);
+  const events = await calendar.getTodaysEvents();
   const now = dayjs().tz('Asia/Ho_Chi_Minh');
 
   // Xóa cache các sự kiện của ngày hôm qua để giải phóng bộ nhớ

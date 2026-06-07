@@ -1,82 +1,106 @@
-const ical = require('node-ical');
+const { google } = require('googleapis');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// Hàm lấy các sự kiện của ngày hôm nay từ iCal link
-const getTodaysEvents = async (icalUrl) => {
-  if (!icalUrl) return [];
-  
+let auth;
+let calendarAPI;
+
+const initCalendar = () => {
+  if (calendarAPI) return calendarAPI;
+
+  const credentialsBase64 = process.env.GOOGLE_CREDENTIALS_BASE64;
+  if (!credentialsBase64) {
+    console.error('Chưa cấu hình GOOGLE_CREDENTIALS_BASE64');
+    return null;
+  }
+
   try {
-    const events = await ical.async.fromURL(icalUrl);
-    const today = dayjs().tz('Asia/Ho_Chi_Minh');
-    const todayStart = today.startOf('day').toDate();
-    const todayEnd = today.endOf('day').toDate();
-    const todaysEvents = [];
+    const credentialsJson = Buffer.from(credentialsBase64, 'base64').toString('utf8');
+    const credentials = JSON.parse(credentialsJson);
 
-    for (const k in events) {
-      if (events.hasOwnProperty(k)) {
-        const ev = events[k];
-        if (ev.type === 'VEVENT') {
-          // 1. Xử lý sự kiện lặp lại (Recurring Events)
-          if (ev.rrule) {
-            const occurrences = ev.rrule.between(todayStart, todayEnd);
-            for (const occStart of occurrences) {
-              // Kiểm tra xem có nằm trong danh sách loại trừ (EXDATE) không
-              const occStartStrLocal = dayjs(occStart).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
-              const occStartStrUtc = dayjs(occStart).utc().format('YYYY-MM-DD');
-              if (ev.exdate && (ev.exdate[occStartStrLocal] || ev.exdate[occStartStrUtc])) {
-                continue; // Bỏ qua sự kiện bị loại trừ
-              }
+    auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/calendar.readonly']
+    });
 
-              const durationMs = ev.end.getTime() - ev.start.getTime();
-              const occEnd = new Date(occStart.getTime() + durationMs);
+    calendarAPI = google.calendar({ version: 'v3', auth });
+    return calendarAPI;
+  } catch (error) {
+    console.error('Lỗi khi khởi tạo Google Calendar API:', error);
+    return null;
+  }
+};
 
-              todaysEvents.push({
-                summary: ev.summary || 'Không có tiêu đề',
-                description: ev.description || '',
-                location: ev.location || '',
-                url: ev.url || '',
-                start: ev.datetype === 'date' ? 'Cả ngày' : dayjs(occStart).tz('Asia/Ho_Chi_Minh').format('HH:mm'),
-                end: ev.datetype === 'date' ? 'Cả ngày' : dayjs(occEnd).tz('Asia/Ho_Chi_Minh').format('HH:mm'),
-                datetype: ev.datetype
-              });
-            }
-          } 
-          // 2. Xử lý sự kiện đơn lẻ (Single Events)
-          else {
-            const startDate = dayjs(ev.start).tz('Asia/Ho_Chi_Minh');
-            const endDate = dayjs(ev.end).tz('Asia/Ho_Chi_Minh');
-            
-            if (today.isSame(startDate, 'day') || (today.isAfter(startDate, 'day') && today.isBefore(endDate, 'day'))) {
-              todaysEvents.push({
-                summary: ev.summary || 'Không có tiêu đề',
-                description: ev.description || '',
-                location: ev.location || '',
-                url: ev.url || '',
-                start: ev.datetype === 'date' ? 'Cả ngày' : startDate.format('HH:mm'),
-                end: ev.datetype === 'date' ? 'Cả ngày' : endDate.format('HH:mm'),
-                datetype: ev.datetype
-              });
-            }
-          }
-        }
+const getTodaysEvents = async () => {
+  const cal = initCalendar();
+  if (!cal) return [];
+  
+  const calendarId = process.env.CALENDAR_ID;
+  if (!calendarId) {
+    console.error('Chưa cấu hình CALENDAR_ID');
+    return [];
+  }
+
+  const todayStart = dayjs().tz('Asia/Ho_Chi_Minh').startOf('day').toISOString();
+  const todayEnd = dayjs().tz('Asia/Ho_Chi_Minh').endOf('day').toISOString();
+
+  try {
+    const res = await cal.events.list({
+      calendarId,
+      timeMin: todayStart,
+      timeMax: todayEnd,
+      maxResults: 100,
+      singleEvents: true, // Google API tự động bung các sự kiện lặp lại (rrule) cực kỳ chuẩn xác
+      orderBy: 'startTime',
+      timeZone: 'Asia/Ho_Chi_Minh'
+    });
+
+    const events = res.data.items || [];
+    const formattedEvents = [];
+
+    events.forEach(ev => {
+      // Xác định đây là sự kiện Cả ngày hay có giờ cụ thể
+      let start, end, datetype;
+      
+      if (ev.start.date) {
+        // Sự kiện cả ngày
+        start = 'Cả ngày';
+        end = 'Cả ngày';
+        datetype = 'date';
+      } else if (ev.start.dateTime) {
+        // Sự kiện có giờ
+        start = dayjs(ev.start.dateTime).tz('Asia/Ho_Chi_Minh').format('HH:mm');
+        end = dayjs(ev.end.dateTime).tz('Asia/Ho_Chi_Minh').format('HH:mm');
+        datetype = 'date-time';
+      } else {
+        return; // Bỏ qua nếu dữ liệu không hợp lệ
       }
-    }
-    
+
+      formattedEvents.push({
+        summary: ev.summary || 'Không có tiêu đề',
+        description: ev.description || '',
+        location: ev.location || '',
+        url: ev.htmlLink || '', // Lấy link Google Calendar chính chủ
+        start,
+        end,
+        datetype
+      });
+    });
+
     // Sắp xếp sự kiện: "Cả ngày" lên đầu, các sự kiện khác theo giờ bắt đầu tăng dần
-    todaysEvents.sort((a, b) => {
+    formattedEvents.sort((a, b) => {
       if (a.start === 'Cả ngày' && b.start !== 'Cả ngày') return -1;
       if (a.start !== 'Cả ngày' && b.start === 'Cả ngày') return 1;
       if (a.start === 'Cả ngày' && b.start === 'Cả ngày') return a.summary.localeCompare(b.summary);
       return a.start.localeCompare(b.start);
     });
 
-    return todaysEvents;
+    return formattedEvents;
   } catch (error) {
-    console.error('Lỗi khi lấy dữ liệu Calendar:', error);
+    console.error('Lỗi khi lấy dữ liệu từ Google Calendar API:', error.message);
     return [];
   }
 };
@@ -84,4 +108,3 @@ const getTodaysEvents = async (icalUrl) => {
 module.exports = {
   getTodaysEvents
 };
-

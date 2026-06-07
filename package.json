@@ -9,6 +9,7 @@
   "dependencies": {
     "dayjs": "^1.11.10",
     "dotenv": "^16.3.1",
+    "googleapis": "^173.0.0",
     "mongoose": "^9.6.3",
     "node-cron": "^3.0.3",
     "node-ical": "^0.17.1",
