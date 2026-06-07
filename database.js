@@ -18,7 +18,8 @@ const User = mongoose.model('User', userSchema);
 const groupSchema = new mongoose.Schema({ 
   chat_id: { type: String, unique: true },
   title: { type: String, default: 'Nhóm' },
-  alias_id: { type: Number, unique: true }
+  alias_id: { type: Number, unique: true },
+  all_tags: { type: String, default: '' }
 });
 const Group = mongoose.model('Group', groupSchema);
 
@@ -81,6 +82,19 @@ const getGroupById = async (aliasId) => {
   return await Group.findOne({ alias_id: aliasId });
 };
 
+const setGroupTags = async (chatId, tags) => {
+  try {
+    await Group.updateOne({ chat_id: chatId }, { all_tags: tags });
+  } catch (err) {
+    console.error('Lỗi setGroupTags:', err);
+  }
+};
+
+const getGroupTags = async (chatId) => {
+  const group = await Group.findOne({ chat_id: chatId });
+  return group ? group.all_tags : '';
+};
+
 const addTask = async (chatId, taskText, reminderTime = null) => {
   const newTask = new Task({
     chat_id: chatId,
@@ -122,5 +136,7 @@ module.exports = {
   addTask,
   getPendingTasks,
   getTasksByReminderTime,
-  markTaskDone
+  markTaskDone,
+  setGroupTags,
+  getGroupTags
 };

@@ -303,6 +303,54 @@ bot.command('testcal', async (ctx) => {
   }
 });
 
+// Lệnh /setall: Cài đặt danh sách tag cho Group
+bot.command('setall', async (ctx) => {
+  if (ctx.chat.type === 'private') {
+    return ctx.reply('Lệnh này chỉ dùng được trong Group nha Sếp!');
+  }
+  
+  const chatId = ctx.chat.id.toString();
+  const rawInput = ctx.message.text.replace(/^\/setall(?:@[a-zA-Z0-9_]+)?\s*/i, '').trim();
+  
+  if (!rawInput) {
+    return ctx.reply('Sếp nhập danh sách tag giúp Bót nha. VD: /setall @user1 @user2');
+  }
+
+  await db.setGroupTags(chatId, rawInput);
+  ctx.reply(`✅ Đã lưu danh sách gọi hồn cho Group này:\n${rawInput}`);
+});
+
+// Lệnh /viewall: Xem danh sách tag của Group
+bot.command('viewall', async (ctx) => {
+  if (ctx.chat.type === 'private') {
+    return ctx.reply('Lệnh này chỉ dùng được trong Group nha Sếp!');
+  }
+  
+  const chatId = ctx.chat.id.toString();
+  const tags = await db.getGroupTags(chatId);
+  
+  if (!tags) {
+    return ctx.reply('Group này chưa cài đặt danh sách @all nào hết á. Sếp dùng lệnh /setall để cài nha!');
+  }
+  
+  ctx.reply(`📣 Danh sách gọi hồn hiện tại của Group là:\n${tags}`);
+});
+
+// Bắt từ khóa @all trong tin nhắn Group
+bot.on('text', async (ctx, next) => {
+  if (ctx.chat.type !== 'private' && ctx.message.text.includes('@all')) {
+    const chatId = ctx.chat.id.toString();
+    const tags = await db.getGroupTags(chatId);
+    
+    if (tags) {
+      // Chỉ tag trần trụi đúng như ý Sếp
+      await ctx.reply(tags);
+    }
+  }
+  // Cho phép các middleware hoặc lệnh khác tiếp tục xử lý
+  return next();
+});
+
 // --- LÊN LỊCH TỰ ĐỘNG (CRON JOBS) ---
 // 1. Nhắc nhở bắt đầu ngày mới và tổng hợp Lịch (8:00 sáng mỗi ngày)
 cron.schedule('0 8 * * *', async () => {
@@ -491,6 +539,8 @@ const startBot = async () => {
     { command: 'groups', description: 'Xem mã số các Nhóm' },
     { command: 'addto', description: 'Giao việc cho Nhóm (VD: /addto 1 Giờ Việc)' },
     { command: 'report', description: 'Ép gửi Checklist vào Nhóm (VD: /report 1)' },
+    { command: 'setall', description: 'Cài đặt tag @all cho Nhóm' },
+    { command: 'viewall', description: 'Xem danh sách tag @all của Nhóm' },
     { command: 'testcal', description: 'Kiểm tra dữ liệu Lịch Google' },
     { command: 'myid', description: 'Xem Telegram ID của Khuii' }
   ]);
