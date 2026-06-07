@@ -464,6 +464,18 @@ const startBot = async () => {
   
   await db.connectDB(mongoUri);
 
+  // Thiết lập Menu Lệnh (Gõ / sẽ hiện ra)
+  bot.telegram.setMyCommands([
+    { command: 'add', description: 'Thêm việc mới cho Khuii' },
+    { command: 'list', description: 'Xem các việc chưa làm' },
+    { command: 'done', description: 'Đánh dấu xong việc (VD: /done 1,2)' },
+    { command: 'groups', description: 'Xem mã số các Nhóm' },
+    { command: 'addto', description: 'Giao việc cho Nhóm (VD: /addto 1 Giờ Việc)' },
+    { command: 'report', description: 'Ép gửi Checklist vào Nhóm (VD: /report 1)' },
+    { command: 'testcal', description: 'Kiểm tra dữ liệu Lịch Google' },
+    { command: 'myid', description: 'Xem Telegram ID của Khuii' }
+  ]);
+
   bot.launch().then(() => {
     console.log('Bot is running...');
   });
