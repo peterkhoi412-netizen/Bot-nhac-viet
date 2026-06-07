@@ -348,6 +348,8 @@ cron.schedule('30 17 * * *', async () => {
   });
 }, { timezone: 'Asia/Ho_Chi_Minh' });
 
+const notifiedEvents = new Set(); // Lưu trữ các sự kiện đã báo để không báo lại
+
 // 3. Nhắc nhở sự kiện sát giờ (chạy kiểm tra mỗi phút)
 cron.schedule('* * * * *', async () => {
   const users = await db.getAllUsers();
@@ -359,17 +361,23 @@ cron.schedule('* * * * *', async () => {
   const events = await calendar.getTodaysEvents(icalUrl);
   const now = dayjs().tz('Asia/Ho_Chi_Minh');
 
+  // Xóa cache các sự kiện của ngày hôm qua để giải phóng bộ nhớ
+  if (now.format('HH:mm') === '00:00') {
+    notifiedEvents.clear();
+  }
+
   events.forEach(e => {
-    // Tách giờ và phút của sự kiện
     const [hours, minutes] = e.start.split(':');
     const eventTime = now.clone().hour(parseInt(hours)).minute(parseInt(minutes)).second(0).millisecond(0);
-    
-    // Tính khoảng thời gian còn lại (bằng phút)
     const diffMinutes = eventTime.diff(now.second(0).millisecond(0), 'minute');
 
-    // Bắn thông báo nếu thời gian còn lại ĐÚNG BẰNG 10 phút
-    if (diffMinutes === 10) {
-      let msg = `⏰ <b>Chuẩn bị họp/sự kiện thuii (10 phút nữa nha)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
+    const eventKey = `${e.summary}-${e.start}`;
+
+    // Nếu thời gian còn lại từ 0 đến 15 phút VÀ chưa từng báo
+    if (diffMinutes <= 15 && diffMinutes >= 0 && !notifiedEvents.has(eventKey)) {
+      notifiedEvents.add(eventKey);
+      
+      let msg = `⏰ <b>Chuẩn bị họp/sự kiện thuii (${diffMinutes} phút nữa nha)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
       if (e.location) msg += `📍 <b>Địa điểm:</b> ${e.location}\n`;
       if (e.url) msg += `🔗 <b>Link:</b> ${e.url}\n`;
       if (e.description) msg += `📝 <b>Mô tả:</b>\n${e.description}`;
