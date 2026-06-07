@@ -52,22 +52,22 @@ bot.start(async (ctx) => {
 
   if (chatType === 'private') {
     await db.saveUser(chatId);
-    ctx.reply('Chào bạn! Tôi là Bot Nhắc Việc. \n\nCác lệnh khả dụng:\n- /add <nội dung>: Thêm công việc\n- /list: Xem việc chưa làm\n- /done <id>: Đánh dấu xong\n- /groups: Xem danh sách Nhóm\n- /addto <mã_nhóm> <giờ> <nội dung>: Giao việc vào Nhóm\n\nTôi sẽ tự động nhắc lịch và báo giờ làm việc hàng ngày nhé!');
+    ctx.reply('Dạ e chào A/C Khuii ạ! E là Bé Bót Nhắc Việc xink xắn đây. \n\nCác lệnh nè:\n- /add <việc>: Thêm việc\n- /list: Xem việc chưa làm\n- /done <số>: Đánh dấu xong\n- /groups: Xem danh sách Nhóm\n- /addto <mã> <giờ> <việc>: Giao việc vào Nhóm\n- /report <mã>: Quăng checklist vào Nhóm\n\nE sẽ nhắc lịch cho A/C mỗi ngày nhen 💕');
   } else {
     const groupData = await db.saveGroup(chatId, ctx.chat.title);
-    ctx.reply(`Đã kích hoạt Bot cho nhóm: ${ctx.chat.title || 'Nhóm này'}\nMã số của Nhóm này là: ${groupData.alias_id}`);
+    ctx.reply(`Bé Bót xin chào cả nhà ạ! Bót đã nhớ Group ${ctx.chat.title || 'này'} rồi nhen.\nMã số của Nhóm là: ${groupData.alias_id}`);
   }
 });
 
 // Lệnh /groups: Xem danh sách các nhóm đã kết nối
 bot.command('groups', async (ctx) => {
   const groups = await db.getGroupList();
-  if (groups.length === 0) return ctx.reply('Chưa có nhóm nào được kết nối.');
-  let msg = '🏢 <b>DANH SÁCH CÁC NHÓM ĐÃ KẾT NỐI</b>\n\n';
+  if (groups.length === 0) return ctx.reply('Dạ hiện tại chưa có nhóm nào được kết nối ạ.');
+  let msg = '🏢 <b>DANH SÁCH NHÓM CỦA KHUII</b>\n\n';
   groups.forEach(g => {
     msg += `Mã số: <b>${g.alias_id}</b> - Tên: ${g.title}\n`;
   });
-  msg += '\n👉 Để giao việc, hãy dùng lệnh:\n<code>/addto &lt;Mã số&gt; &lt;Giờ&gt; &lt;Nội dung&gt;</code>';
+  msg += '\n👉 Để giao việc, A/C dùng lệnh:\n<code>/addto &lt;Mã số&gt; &lt;Giờ&gt; &lt;Nội dung&gt;</code>';
   ctx.replyWithHTML(msg);
 });
 
@@ -107,11 +107,11 @@ bot.command('addto', async (ctx) => {
     for (let line of lines) {
       await db.addTask(targetChatId, line, null);
     }
-    return ctx.reply(`✅ Đã thêm ${lines.length} công việc vào nhóm [${targetGroup.title}]. (Không hẹn giờ nhắc)`);
+    return ctx.reply(`✅ Dạ Bót đã thêm ${lines.length} việc rùi ạ. (Hông hẹn giờ nhắc)`);
   }
 
   // Nếu có hẹn giờ, tạo task riêng cho từng mốc thời gian
-  let msg = `✅ Đã thêm các công việc sau vào nhóm [${targetGroup.title}]:\n`;
+  let msg = `✅ Dạ Bót đã thêm các việc sau vào nhóm [${targetGroup.title}] rùi nè:\n`;
   for (let time of reminderTimes) {
     for (let line of lines) {
       await db.addTask(targetChatId, line, time);
@@ -119,6 +119,41 @@ bot.command('addto', async (ctx) => {
     msg += `- ⏰ ${time}: ${lines.join(', ')}\n`;
   }
   ctx.reply(msg);
+});
+
+// Lệnh /report: Ép Bot gửi Checklist vào Group ngay lập tức (dùng cho T7, CN hoặc bất cứ lúc nào)
+bot.command('report', async (ctx) => {
+  const text = ctx.message.text.replace('/report', '').trim();
+  const targetAliasId = parseInt(text);
+  
+  if (isNaN(targetAliasId)) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /report <Mã Nhóm>\nVí dụ: /report 1');
+  }
+
+  const targetGroup = await db.getGroupById(targetAliasId);
+  if (!targetGroup) {
+    return ctx.reply(`Không tìm thấy nhóm nào có mã số ${targetAliasId}.`);
+  }
+
+  const pendingTasks = await db.getPendingTasks(targetGroup.chat_id);
+  
+  let reportMsg = '📊 <b>Checklist Công Việc Tăng Cường</b>\n\nTuy là cuối tuần, nhưng có 1 số task gấp A/C cố gắng hoàn thành giúp em ọ\n\n';
+  
+  if (pendingTasks.length === 0) {
+    return ctx.reply('Dạ hiện tại nhóm chưa có việc nào nên hông cần ép báo cáo đâu ạ.');
+  } else {
+    pendingTasks.forEach((t, idx) => {
+      const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+      reportMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
+    });
+  }
+
+  bot.telegram.sendMessage(targetGroup.chat_id, reportMsg, { parse_mode: 'HTML' })
+    .then(() => ctx.reply(`✅ Đã "quăng" Checklist vào nhóm [${targetGroup.title}] thành công!`))
+    .catch(e => {
+      console.error(e);
+      ctx.reply('❌ Có lỗi xảy ra khi gửi tin nhắn vào nhóm.');
+    });
 });
 
 // Lệnh /add: Thêm task mới (hỗ trợ nhiều thời gian và nhiều dòng)
@@ -131,7 +166,7 @@ bot.command('add', async (ctx) => {
   }
   
   const lines = rawText.split('\n').filter(l => l.trim() !== '');
-  let replyMsg = '✅ <b>Đã thêm các công việc sau:</b>\n';
+  let replyMsg = '✅ <b>Dạ Bót đã ghi nhận các việc sau:</b>\n';
 
   try {
     for (const line of lines) {
@@ -169,19 +204,19 @@ bot.command('add', async (ctx) => {
 bot.command('list', async (ctx) => {
   const chatId = ctx.chat.id.toString();
   try {
-    const tasks = await db.getPendingTasks(chatId);
-    if (tasks.length === 0) {
-      return ctx.reply('🎉 Bạn không có công việc nào đang chờ!');
+    const pendingTasks = await db.getPendingTasks(chatId);
+    if (pendingTasks.length === 0) {
+      return ctx.reply('🎉 Zéeee! Hiện tại hông có việc nào tồn đọng hết á!');
     }
     
-    let message = '📋 <b>Danh sách công việc chưa làm:</b>\n\n';
-    tasks.forEach((t, index) => {
-      const timeStr = t.reminder_time ? `[⏰ ${t.reminder_time}] ` : '';
-      message += `<b>${index + 1}.</b> ${timeStr}${t.task}\n`;
+    let msg = '📋 <b>DANH SÁCH VIỆC CHƯA LÀM</b>\n\n';
+    pendingTasks.forEach((t, index) => {
+      const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+      msg += `<b>${index + 1}.</b> ${t.task}${timeStr}\n`;
     });
-    message += '\nDùng lệnh <code>/done &lt;số&gt;</code> để đánh dấu hoàn thành.';
+    msg += '\n👉 A/C gõ <code>/done &lt;số&gt;</code> để đánh dấu xong nha!';
     
-    ctx.reply(message, { parse_mode: 'HTML' });
+    ctx.reply(msg, { parse_mode: 'HTML' });
   } catch (err) {
     ctx.reply('❌ Lỗi khi tải danh sách công việc.');
   }
@@ -193,14 +228,14 @@ bot.command('done', async (ctx) => {
   const rawInput = ctx.message.text.replace(/^\/done(?:@[a-zA-Z0-9_]+)?\s*/i, '').trim();
   
   if (!rawInput) {
-    return ctx.reply('Vui lòng nhập số thứ tự hợp lệ. Ví dụ: /done 1 hoặc /done 1,2,3');
+    return ctx.reply('Dạ A/C nhập số thứ tự giúp Bót nha. Ví dụ: /done 1 hoặc /done 1,2,3');
   }
   
   const pendingTasks = await db.getPendingTasks(chatId);
   const taskIndices = rawInput.split(/[, ]+/).filter(id => !isNaN(id) && id.trim() !== '');
 
   if (taskIndices.length === 0) {
-    return ctx.reply('Vui lòng nhập số thứ tự hợp lệ (chỉ chứa số). Ví dụ: /done 1,2,3');
+    return ctx.reply('Dạ A/C nhập số thứ tự hợp lệ giúp Bót nha (chỉ chứa số). Ví dụ: /done 1,2,3');
   }
 
   try {
@@ -222,17 +257,16 @@ bot.command('done', async (ctx) => {
       }
     }
 
-    let replyMsg = '';
     if (successIndices.length > 0) {
-      replyMsg += `✅ Đã hoàn thành công việc số: <b>${successIndices.join(', ')}</b>\n`;
-    }
-    if (failedIndices.length > 0) {
-      replyMsg += `⚠️ Không tìm thấy hoặc đã xong số: <b>${failedIndices.join(', ')}</b>`;
+      let successText = successIndices.map(t => `👉 <i>${t}</i>`).join('\n');
+      ctx.reply(`✅ Giỏi quá ta! Đã gạch xong việc nè:\n${successText}`, { parse_mode: 'HTML' });
     }
     
-    ctx.reply(replyMsg.trim(), { parse_mode: 'HTML' });
+    if (failedIndices.length > 0) {
+      ctx.reply(`❌ Ỏ, hông tìm thấy các công việc mang số: ${failedIndices.join(', ')}`);
+    }
   } catch (err) {
-    ctx.reply('❌ Lỗi khi cập nhật công việc.');
+    ctx.reply('❌ Có lỗi xảy ra, hông gạch việc được ạ.');
   }
 });
 
@@ -271,24 +305,37 @@ cron.schedule('0 8 * * *', async () => {
   const icalUrl = process.env.CALENDAR_ICAL_URL;
   const events = await calendar.getTodaysEvents(icalUrl);
   
-  let msg = '🌅 <b>Chào buổi sáng! Bắt đầu ngày làm việc mới năng suất nhé!</b>\n\n';
+  let msg = '🌅 <b>Chào buổi sáng tốt lành! Chúc A/C một ngày làm việc siêu năng suất nhen 💕</b>\n\n';
   
   if (events.length > 0) {
-    msg += '📅 <b>Lịch trình của bạn hôm nay:</b>\n';
+    msg += '📅 <b>Lịch trình của A/C hôm nay nè:</b>\n';
     events.forEach(e => {
       msg += `- ${e.start} - ${e.end}: <b>${e.summary}</b>\n`;
       if (e.location) msg += `  📍 <b>Địa điểm:</b> ${e.location}\n`;
       if (e.url) msg += `  🔗 <b>Link:</b> ${e.url}\n`;
     });
   } else {
-    msg += '📅 Bạn không có lịch họp nào hôm nay.\n';
+    msg += '📅 Hôm nay A/C hông có lịch họp nào hết á.\n';
   }
 
-  // Gửi thông báo cho tất cả người dùng
-  users.forEach(chatId => {
-    bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
+  // Gửi 2 thông báo: 1 lịch sự kiện, 1 danh sách task
+  for (const chatId of users) {
+    // Gửi Lịch
+    await bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
       .catch(e => console.error(`Failed to send morning msg to ${chatId}`));
-  });
+
+    // Gửi Danh sách Task
+    const pendingTasks = await db.getPendingTasks(chatId);
+    if (pendingTasks.length > 0) {
+      let taskMsg = '📋 <b>Các việc Khuii cần hoàn thành hôm nay nè:</b>\n\n';
+      pendingTasks.forEach((t, idx) => {
+        const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+        taskMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
+      });
+      await bot.telegram.sendMessage(chatId, taskMsg, { parse_mode: 'HTML' })
+        .catch(e => console.error(`Failed to send morning tasks to ${chatId}`));
+    }
+  }
 }, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 2. Nhắc nhở cuối ngày làm việc (17:30 chiều mỗi ngày)
@@ -296,7 +343,7 @@ cron.schedule('30 17 * * *', async () => {
   const users = await db.getAllUsers();
   
   users.forEach(chatId => {
-    bot.telegram.sendMessage(chatId, '🌇 Đã 5h30 chiều! Bạn nhớ tổng kết lại các công việc trong ngày và đánh dấu xong (lệnh /done) nhé. Nghỉ ngơi thôi nào!')
+    bot.telegram.sendMessage(chatId, '🌇 Đã 5h30 chiều gòi! Mọi người nhớ check lại việc trong ngày rồi gõ /done nhen. Chuẩn bị nghỉ ngơi thuii 💖')
       .catch(e => console.error(`Failed to send evening msg to ${chatId}`));
   });
 }, { timezone: 'Asia/Ho_Chi_Minh' });
@@ -322,7 +369,7 @@ cron.schedule('* * * * *', async () => {
 
     // Bắn thông báo nếu thời gian còn lại ĐÚNG BẰNG 10 phút
     if (diffMinutes === 10) {
-      let msg = `⏰ <b>Sắp tới sự kiện (10 phút nữa)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
+      let msg = `⏰ <b>Chuẩn bị họp/sự kiện thuii (10 phút nữa nha)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
       if (e.location) msg += `📍 <b>Địa điểm:</b> ${e.location}\n`;
       if (e.url) msg += `🔗 <b>Link:</b> ${e.url}\n`;
       if (e.description) msg += `📝 <b>Mô tả:</b>\n${e.description}`;
@@ -335,17 +382,28 @@ cron.schedule('* * * * *', async () => {
   });
 }, { timezone: 'Asia/Ho_Chi_Minh' });
 
-// 4. Báo cáo tự động vào Group (9:00 sáng mỗi ngày)
-cron.schedule('0 9 * * *', async () => {
+// 4. Báo cáo tự động vào Group (9:00 sáng từ Thứ 2 - Thứ 6)
+cron.schedule('0 9 * * 1-5', async () => {
   const groups = await db.getAllGroups();
   if (groups.length === 0) return;
 
-  const reportMsg = '📊 <b>Báo Cáo Buổi Sáng</b>\n\nĐây là thông báo tự động dành riêng cho Group! Chúc mọi người ngày làm việc hiệu quả.';
+  for (const chatId of groups) {
+    const pendingTasks = await db.getPendingTasks(chatId);
+    
+    let reportMsg = '📊 <b>Checklist Công Việc Hôm Nay</b>\n\nChào buổi sáng cả nhà! Chúc mọi người làm việc siêu hiệu quả nhé. Dưới đây là list việc hôm nay ạ:\n\n';
+    
+    if (pendingTasks.length === 0) {
+      continue; // Hông có việc thì hông gửi luôn
+    } else {
+      pendingTasks.forEach((t, idx) => {
+        const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+        reportMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
+      });
+    }
 
-  groups.forEach(chatId => {
     bot.telegram.sendMessage(chatId, reportMsg, { parse_mode: 'HTML' })
       .catch(e => console.error('Lỗi khi gửi báo cáo vào group:', e));
-  });
+  }
 }, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // 5. Nhắc nhở Task theo mốc giờ hẹn (chạy mỗi phút)
@@ -367,7 +425,7 @@ cron.schedule('* * * * *', async () => {
     for (const chatId in tasksByChat) {
       const allPending = await db.getPendingTasks(chatId);
 
-      let msg = `🔔 <b>Tới giờ làm việc rồi! (${currentHHMM})</b>\n\n`;
+      let msg = `🔔 <b>Tới giờ làm việc rùi nè! (${currentHHMM})</b>\n\n`;
       tasksByChat[chatId].forEach(t => {
         const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
         msg += `<b>${displayIdx}.</b> ${t.task}\n`;
@@ -375,7 +433,7 @@ cron.schedule('* * * * *', async () => {
       
       // Chỉ hiện hướng dẫn /done nếu là chat cá nhân (ID không bắt đầu bằng dấu trừ)
       if (!chatId.toString().startsWith('-')) {
-        msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhé!`;
+        msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;
       }
 
       bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
@@ -384,6 +442,15 @@ cron.schedule('* * * * *', async () => {
   } catch (err) {
     console.error('Lỗi cron nhắc task theo giờ:', err);
   }
+}, { timezone: 'Asia/Ho_Chi_Minh' });
+
+// 6. Nhắc nhở lên lịch ngày mai (22:00 mỗi ngày)
+cron.schedule('0 22 * * *', async () => {
+  const users = await db.getAllUsers();
+  users.forEach(chatId => {
+    bot.telegram.sendMessage(chatId, '🌙 Tới 10h tối gòi nè! Khuii nhớ take note lại các lịch trình và việc cần làm cho ngày mai nha. Chúc Khuii ngủ ngon hihi 💖')
+      .catch(e => console.error(`Failed to send 22:00 msg to ${chatId}`));
+  });
 }, { timezone: 'Asia/Ho_Chi_Minh' });
 
 // --- CHẠY BOT ---
