@@ -352,173 +352,132 @@ bot.on('text', async (ctx, next) => {
 });
 
 // --- LÊN LỊCH TỰ ĐỘNG (CRON JOBS) ---
-// 1. Nhắc nhở bắt đầu ngày mới và tổng hợp Lịch (8:00 sáng mỗi ngày)
-cron.schedule('0 8 * * *', async () => {
-  const users = await db.getAllUsers();
-  if (users.length === 0) return;
+const notifiedEvents = new Set(); // Lưu trữ các sự kiện đã báo
 
-  const icalUrl = process.env.CALENDAR_ICAL_URL;
-  if (!icalUrl) return;
-
-  const events = await calendar.getTodaysEvents(icalUrl);
-  
-  let msg = '🌅 <b>Chào buổi sáng tốt lành! Chúc A/C một ngày làm việc siêu năng suất nhen 💕</b>\n\n';
-  
-  if (events.length > 0) {
-    msg += '📅 <b>Lịch trình của A/C hôm nay nè:</b>\n';
-    events.forEach(e => {
-      const timeStr = e.start === 'Cả ngày' ? 'Cả ngày' : `${e.start} - ${e.end}`;
-      msg += `- ${timeStr}: <b>${e.summary}</b>\n`;
-      if (e.location) msg += `  📍 <b>Địa điểm:</b> ${e.location}\n`;
-      if (e.url) msg += `  🔗 <b>Link:</b> ${e.url}\n`;
-    });
-  } else {
-    msg += '📅 Hôm nay A/C hông có lịch họp nào hết á.\n';
-  }
-
-  // Gửi 2 thông báo: 1 lịch sự kiện, 1 danh sách task
-  for (const chatId of users) {
-    // Gửi Lịch
-    await bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
-      .catch(e => console.error(`Failed to send morning msg to ${chatId}`));
-
-    // Gửi Danh sách Task
-    const pendingTasks = await db.getPendingTasks(chatId);
-    if (pendingTasks.length > 0) {
-      let taskMsg = '📋 <b>Các việc Khuii cần hoàn thành hôm nay nè:</b>\n\n';
-      pendingTasks.forEach((t, idx) => {
-        const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
-        taskMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
-      });
-      await bot.telegram.sendMessage(chatId, taskMsg, { parse_mode: 'HTML' })
-        .catch(e => console.error(`Failed to send morning tasks to ${chatId}`));
-    }
-  }
-}, { timezone: 'Asia/Ho_Chi_Minh' });
-
-// 2. Nhắc nhở cuối ngày làm việc (17:30 chiều mỗi ngày)
-cron.schedule('30 17 * * *', async () => {
-  const users = await db.getAllUsers();
-  
-  users.forEach(chatId => {
-    bot.telegram.sendMessage(chatId, '🌇 Đã 5h30 chiều gòi! Mọi người nhớ check lại việc trong ngày rồi gõ /done nhen. Chuẩn bị nghỉ ngơi thuii 💖')
-      .catch(e => console.error(`Failed to send evening msg to ${chatId}`));
-  });
-}, { timezone: 'Asia/Ho_Chi_Minh' });
-
-const notifiedEvents = new Set(); // Lưu trữ các sự kiện đã báo để không báo lại
-
-// 3. Nhắc nhở sự kiện sát giờ (chạy kiểm tra mỗi phút)
 cron.schedule('* * * * *', async () => {
   const users = await db.getAllUsers();
-  if (users.length === 0) return;
-
+  const groups = await db.getAllGroups();
+  
   const icalUrl = process.env.CALENDAR_ICAL_URL;
-  if (!icalUrl) return;
-
-  const events = await calendar.getTodaysEvents(icalUrl);
+  const events = icalUrl ? await calendar.getTodaysEvents(icalUrl) : [];
+  
   const now = dayjs().tz('Asia/Ho_Chi_Minh');
+  const currentHHMM = now.format('HH:mm');
+  const dayOfWeek = now.day(); // 0 is Sun, 1 is Mon...
 
   // Xóa cache các sự kiện của ngày hôm qua để giải phóng bộ nhớ
-  if (now.format('HH:mm') === '00:00') {
+  if (currentHHMM === '00:00') {
     notifiedEvents.clear();
   }
 
-  events.forEach(e => {
-    if (e.start === 'Cả ngày') return; // Bỏ qua sự kiện cả ngày khi kiểm tra sát giờ
-    const [hours, minutes] = e.start.split(':');
-    const eventTime = now.clone().hour(parseInt(hours)).minute(parseInt(minutes)).second(0).millisecond(0);
-    const diffMinutes = eventTime.diff(now.second(0).millisecond(0), 'minute');
-
-    const eventKey = `${e.summary}-${e.start}`;
-
-    // Nếu thời gian còn lại từ 0 đến 15 phút VÀ chưa từng báo
-    if (diffMinutes <= 15 && diffMinutes >= 0 && !notifiedEvents.has(eventKey)) {
-      notifiedEvents.add(eventKey);
-      
-      let msg = `⏰ <b>Chuẩn bị họp/sự kiện thuii (${diffMinutes} phút nữa nha)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
-      if (e.location) msg += `📍 <b>Địa điểm:</b> ${e.location}\n`;
-      if (e.url) msg += `🔗 <b>Link:</b> ${e.url}\n`;
-      if (e.description) msg += `📝 <b>Mô tả:</b>\n${e.description}`;
-
-      users.forEach(chatId => {
-        bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
-          .catch(err => console.error('Lỗi khi gửi nhắc lịch sát giờ:', err));
+  // --- 1. NHẮC NHỞ BẮT ĐẦU NGÀY MỚI (08:00) ---
+  if (currentHHMM === '08:00' && users.length > 0) {
+    let msg = '🌅 <b>Chào buổi sáng tốt lành! Chúc A/C một ngày làm việc siêu năng suất nhen 💕</b>\n\n';
+    if (events.length > 0) {
+      msg += '📅 <b>Lịch trình của A/C hôm nay nè:</b>\n';
+      events.forEach(e => {
+        const timeStr = e.start === 'Cả ngày' ? 'Cả ngày' : `${e.start} - ${e.end}`;
+        msg += `- ${timeStr}: <b>${e.summary}</b>\n`;
+        if (e.location) msg += `  📍 <b>Địa điểm:</b> ${e.location}\n`;
+        if (e.url) msg += `  🔗 <b>Link:</b> ${e.url}\n`;
       });
-    }
-  });
-}, { timezone: 'Asia/Ho_Chi_Minh' });
-
-// 4. Báo cáo tự động vào Group (9:00 sáng từ Thứ 2 - Thứ 6)
-cron.schedule('0 9 * * 1-5', async () => {
-  const groups = await db.getAllGroups();
-  if (groups.length === 0) return;
-
-  for (const chatId of groups) {
-    const pendingTasks = await db.getPendingTasks(chatId);
-    
-    let reportMsg = '📊 <b>Checklist Công Việc Hôm Nay</b>\n\nChào buổi sáng cả nhà! Chúc mọi người làm việc siêu hiệu quả nhé. Dưới đây là list việc hôm nay ạ:\n\n';
-    
-    if (pendingTasks.length === 0) {
-      continue; // Hông có việc thì hông gửi luôn
     } else {
+      msg += '📅 Hôm nay A/C hông có lịch họp nào hết á.\n';
+    }
+
+    for (const chatId of users) {
+      await bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
+      const pendingTasks = await db.getPendingTasks(chatId);
+      if (pendingTasks.length > 0) {
+        let taskMsg = '📋 <b>Các việc Khuii cần hoàn thành hôm nay nè:</b>\n\n';
+        pendingTasks.forEach((t, idx) => {
+          const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+          taskMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
+        });
+        await bot.telegram.sendMessage(chatId, taskMsg, { parse_mode: 'HTML' }).catch(console.error);
+      }
+    }
+  }
+
+  // --- 2. BÁO CÁO GROUP (09:00 Thứ 2 - Thứ 6) ---
+  if (currentHHMM === '09:00' && dayOfWeek >= 1 && dayOfWeek <= 5 && groups.length > 0) {
+    for (const chatId of groups) {
+      const pendingTasks = await db.getPendingTasks(chatId);
+      if (pendingTasks.length === 0) continue;
+      let reportMsg = '📊 <b>Checklist Công Việc Hôm Nay</b>\n\nChào buổi sáng cả nhà! Chúc mọi người làm việc siêu hiệu quả nhé. Dưới đây là list việc hôm nay ạ:\n\n';
       pendingTasks.forEach((t, idx) => {
         const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
         reportMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
       });
+      bot.telegram.sendMessage(chatId, reportMsg, { parse_mode: 'HTML' }).catch(console.error);
     }
-
-    bot.telegram.sendMessage(chatId, reportMsg, { parse_mode: 'HTML' })
-      .catch(e => console.error('Lỗi khi gửi báo cáo vào group:', e));
   }
-}, { timezone: 'Asia/Ho_Chi_Minh' });
 
-// 5. Nhắc nhở Task theo mốc giờ hẹn (chạy mỗi phút)
-cron.schedule('* * * * *', async () => {
-  const now = dayjs().tz('Asia/Ho_Chi_Minh');
-  const currentHHMM = now.format('HH:mm');
+  // --- 3. NHẮC NHỞ CUỐI NGÀY (17:30) ---
+  if (currentHHMM === '17:30' && users.length > 0) {
+    users.forEach(chatId => {
+      bot.telegram.sendMessage(chatId, '🌇 Đã 5h30 chiều gòi! Mọi người nhớ check lại việc trong ngày rồi gõ /done nhen. Chuẩn bị nghỉ ngơi thuii 💖').catch(console.error);
+    });
+  }
 
+  // --- 4. NHẮC LÊN LỊCH NGÀY MAI (22:00) ---
+  if (currentHHMM === '22:00' && users.length > 0) {
+    users.forEach(chatId => {
+      bot.telegram.sendMessage(chatId, '🌙 Tới 10h tối gòi nè! Khuii nhớ take note lại các lịch trình và việc cần làm cho ngày mai nha. Chúc Khuii ngủ ngon hihi 💖').catch(console.error);
+    });
+  }
+
+  // --- 5. NHẮC SỰ KIỆN SÁT GIỜ (MỖI PHÚT) ---
+  if (users.length > 0 && events.length > 0) {
+    events.forEach(e => {
+      if (e.start === 'Cả ngày') return;
+      const [hours, minutes] = e.start.split(':');
+      const eventTime = now.clone().hour(parseInt(hours)).minute(parseInt(minutes)).second(0).millisecond(0);
+      const diffMinutes = eventTime.diff(now.second(0).millisecond(0), 'minute');
+      const eventKey = `${e.summary}-${e.start}`;
+
+      if (diffMinutes <= 15 && diffMinutes >= 0 && !notifiedEvents.has(eventKey)) {
+        notifiedEvents.add(eventKey);
+        let msg = `⏰ <b>Chuẩn bị họp/sự kiện thuii (${diffMinutes} phút nữa nha)!</b>\n\n📌 <b>Sự kiện:</b> ${e.summary}\n🕒 <b>Thời gian:</b> ${e.start} - ${e.end}\n`;
+        if (e.location) msg += `📍 <b>Địa điểm:</b> ${e.location}\n`;
+        if (e.url) msg += `🔗 <b>Link:</b> ${e.url}\n`;
+        if (e.description) msg += `📝 <b>Mô tả:</b>\n${e.description}`;
+
+        users.forEach(chatId => {
+          bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
+        });
+      }
+    });
+  }
+
+  // --- 6. NHẮC TASK THEO GIỜ HẸN (MỖI PHÚT) ---
   try {
     const tasks = await db.getTasksByReminderTime(currentHHMM);
-    if (tasks.length === 0) return;
-
-    // Phân nhóm task theo chat_id để gửi 1 tin nhắn gộp nếu có nhiều task
-    const tasksByChat = {};
-    tasks.forEach(t => {
-      if (!tasksByChat[t.chat_id]) tasksByChat[t.chat_id] = [];
-      tasksByChat[t.chat_id].push(t);
-    });
-
-    for (const chatId in tasksByChat) {
-      const allPending = await db.getPendingTasks(chatId);
-
-      let msg = `🔔 <b>Tới giờ làm việc rùi nè! (${currentHHMM})</b>\n\n`;
-      tasksByChat[chatId].forEach(t => {
-        const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
-        msg += `<b>${displayIdx}.</b> ${t.task}\n`;
+    if (tasks.length > 0) {
+      const tasksByChat = {};
+      tasks.forEach(t => {
+        if (!tasksByChat[t.chat_id]) tasksByChat[t.chat_id] = [];
+        tasksByChat[t.chat_id].push(t);
       });
-      
-      // Chỉ hiện hướng dẫn /done nếu là chat cá nhân (ID không bắt đầu bằng dấu trừ)
-      if (!chatId.toString().startsWith('-')) {
-        msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;
-      }
 
-      bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' })
-        .catch(err => console.error('Lỗi khi gửi nhắc task:', err));
+      for (const chatId in tasksByChat) {
+        const allPending = await db.getPendingTasks(chatId);
+        let msg = `🔔 <b>Tới giờ làm việc rùi nè! (${currentHHMM})</b>\n\n`;
+        tasksByChat[chatId].forEach(t => {
+          const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
+          msg += `<b>${displayIdx}.</b> ${t.task}\n`;
+        });
+        if (!chatId.toString().startsWith('-')) {
+          msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;
+        }
+        bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
+      }
     }
   } catch (err) {
-    console.error('Lỗi cron nhắc task theo giờ:', err);
+    console.error('Lỗi cron nhắc task:', err);
   }
-}, { timezone: 'Asia/Ho_Chi_Minh' });
 
-// 6. Nhắc nhở lên lịch ngày mai (22:00 mỗi ngày)
-cron.schedule('0 22 * * *', async () => {
-  const users = await db.getAllUsers();
-  users.forEach(chatId => {
-    bot.telegram.sendMessage(chatId, '🌙 Tới 10h tối gòi nè! Khuii nhớ take note lại các lịch trình và việc cần làm cho ngày mai nha. Chúc Khuii ngủ ngon hihi 💖')
-      .catch(e => console.error(`Failed to send 22:00 msg to ${chatId}`));
-  });
-}, { timezone: 'Asia/Ho_Chi_Minh' });
+});
 
 // --- CHẠY BOT ---
 const startBot = async () => {

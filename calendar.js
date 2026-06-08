@@ -15,6 +15,17 @@ const getTodaysEvents = async (icalUrl) => {
     const todayStart = now.startOf('day');
     const todayEnd = now.endOf('day');
 
+    const escapeHtml = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]*>?/gm, '') // Xóa các thẻ HTML không hợp lệ
+        .replace(/&/g, '&amp;')    // Bắt buộc cho Telegram
+        .replace(/</g, '&lt;')     // Bắt buộc cho Telegram
+        .replace(/>/g, '&gt;');    // Bắt buộc cho Telegram
+    };
+
     for (const k in data) {
       if (!Object.hasOwn(data, k)) continue;
       const ev = data[k];
@@ -78,9 +89,9 @@ const getTodaysEvents = async (icalUrl) => {
 
       if (isToday) {
         events.push({
-          summary: ev.summary || 'Không có tiêu đề',
-          description: ev.description || '',
-          location: ev.location || '',
+          summary: escapeHtml(ev.summary) || 'Không có tiêu đề',
+          description: escapeHtml(ev.description) || '',
+          location: escapeHtml(ev.location) || '',
           url: ev.url || '',
           start: startStr,
           end: endStr,
