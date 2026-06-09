@@ -336,6 +336,36 @@ bot.command('viewall', async (ctx) => {
   ctx.reply(`📣 Danh sách gọi hồn hiện tại của Group là:\n${tags}`);
 });
 
+// Lệnh /say: Bắt Bót phát ngôn trong Group
+bot.command('say', async (ctx) => {
+  if (ctx.chat.type !== 'private') {
+    return ctx.reply('Sếp ơi, lệnh này chỉ dùng được ở chat riêng để tránh "lộ bài" nha!');
+  }
+  
+  const rawInput = ctx.message.text.replace(/^\/say(?:@[a-zA-Z0-9_]+)?\s*/i, '').trim();
+  const match = rawInput.match(/^(\d+)\s+(.+)/s); // Bắt mã nhóm và nội dung (hỗ trợ xuống dòng)
+  
+  if (!match) {
+    return ctx.reply('Sai cú pháp rồi Sếp ơi. Sếp gõ theo mẫu nhé: /say 1 Alo mọi người!');
+  }
+  
+  const aliasId = parseInt(match[1]);
+  const msgContent = match[2];
+  
+  try {
+    const targetGroup = await db.getGroupById(aliasId);
+    if (!targetGroup) {
+      return ctx.reply(`❌ Ỏ, Bót hông tìm thấy Nhóm nào có mã số là ${aliasId} hết á. Sếp gõ /groups để kiểm tra lại nha.`);
+    }
+    
+    await bot.telegram.sendMessage(targetGroup.chat_id, msgContent);
+    ctx.reply(`✅ Bót đã ngoan ngoãn truyền đạt thánh chỉ của Sếp vào Nhóm [${targetGroup.title}] rồi nha!`);
+  } catch (err) {
+    console.error('Lỗi khi thực hiện lệnh /say:', err);
+    ctx.reply('❌ Bót bị lỗi khi gửi tin nhắn vào nhóm. Sếp thử lại sau nha.');
+  }
+});
+
 // Bắt từ khóa @all trong tin nhắn Group
 bot.on('text', async (ctx, next) => {
   if (ctx.chat.type !== 'private' && ctx.message.text.includes('@all')) {
@@ -500,6 +530,7 @@ const startBot = async () => {
     { command: 'report', description: 'Ép gửi Checklist vào Nhóm (VD: /report 1)' },
     { command: 'setall', description: 'Cài đặt tag @all cho Nhóm' },
     { command: 'viewall', description: 'Xem danh sách tag @all của Nhóm' },
+    { command: 'say', description: 'Bắt Bót nói trong Nhóm (VD: /say 1 Chào mn)' },
     { command: 'testcal', description: 'Kiểm tra dữ liệu Lịch Google' },
     { command: 'myid', description: 'Xem Telegram ID của Khuii' }
   ]);
