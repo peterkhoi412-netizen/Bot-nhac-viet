@@ -395,8 +395,8 @@ cron.schedule('* * * * *', async () => {
   const currentHHMM = now.format('HH:mm');
   const dayOfWeek = now.day(); // 0 is Sun, 1 is Mon...
 
-  // Xóa cache các sự kiện của ngày hôm qua để giải phóng bộ nhớ
-  if (currentHHMM === '00:00') {
+  // Xóa cache các sự kiện của ngày hôm qua để giải phóng bộ nhớ (Chỉ cần làm vào ban đêm để an toàn)
+  if (currentHHMM === '01:00' || currentHHMM === '02:00') {
     notifiedEvents.clear();
   }
 
@@ -464,7 +464,10 @@ cron.schedule('* * * * *', async () => {
       const [hours, minutes] = e.start.split(':');
       const eventTime = now.clone().hour(parseInt(hours)).minute(parseInt(minutes)).second(0).millisecond(0);
       const diffMinutes = eventTime.diff(now.second(0).millisecond(0), 'minute');
-      const eventKey = `${e.summary}-${e.start}`;
+      
+      // Khóa eventKey phải bao gồm ngày hiện tại để tránh lỗi trùng lặp khi lịch lặp lại vào ngày khác
+      const eventDate = now.format('YYYY-MM-DD');
+      const eventKey = `${eventDate}-${e.summary}-${e.start}`;
 
       if (diffMinutes <= 15 && diffMinutes >= 0 && !notifiedEvents.has(eventKey)) {
         notifiedEvents.add(eventKey);
