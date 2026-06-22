@@ -131,13 +131,17 @@ bot.command('addto', async (ctx) => {
     const { recurrence, cleanedText, label } = parseRecurrence(line);
     const recLabel = label ? ` ${label}` : '';
     
+    // Xóa thời gian ra khỏi nội dung (dùng timeRegex đã có ở trên)
+    let taskName = cleanedText.replace(timeRegex, '').trim();
+    if (!taskName) taskName = "Công việc không tên";
+    
     if (reminderTimes.length === 0) {
-      await db.addTask(targetChatId, cleanedText, null, recurrence);
-      msg += `- ${cleanedText}${recLabel}\n`;
+      await db.addTask(targetChatId, taskName, null, recurrence);
+      msg += `- ${taskName}${recLabel}\n`;
     } else {
       for (let time of reminderTimes) {
-        await db.addTask(targetChatId, cleanedText, time, recurrence);
-        msg += `- ⏰ ${time}: ${cleanedText}${recLabel}\n`;
+        await db.addTask(targetChatId, taskName, time, recurrence);
+        msg += `- ⏰ ${time}: ${taskName}${recLabel}\n`;
       }
     }
   }
@@ -320,6 +324,111 @@ bot.command('done', async (ctx) => {
     }
   } catch (err) {
     ctx.reply('❌ Có lỗi xảy ra, hông gạch việc được ạ.');
+  }
+});
+
+// Lệnh /listto: Xem danh sách công việc của Nhóm từ chat riêng
+bot.command('listto', async (ctx) => {
+  if (ctx.chat.type !== 'private') return ctx.reply('Lệnh này chỉ dùng ở chat riêng nha Sếp!');
+  const text = ctx.message.text.replace('/listto', '').trim();
+  const targetAliasId = parseInt(text);
+  
+  if (isNaN(targetAliasId)) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /listto <Mã Nhóm>\nVí dụ: /listto 1');
+  }
+
+  const targetGroup = await db.getGroupById(targetAliasId);
+  if (!targetGroup) return ctx.reply(`Không tìm thấy nhóm nào có mã số ${targetAliasId}.`);
+
+  try {
+    let pendingTasks = await db.getPendingTasks(targetGroup.chat_id);
+    const now = dayjs().tz('Asia/Ho_Chi_Minh');
+    const todayStr = now.format('YYYY-MM-DD');
+    const currentDayOfWeek = now.day();
+    
+    pendingTasks = pendingTasks.filter(t => {
+      if (t.recurrence && t.recurrence.length > 0) {
+        if (t.last_done_date === todayStr) return false;
+        if (!t.recurrence.includes(currentDayOfWeek)) return false;
+      }
+      return true;
+    });
+
+    if (pendingTasks.length === 0) {
+      return ctx.reply(`🎉 Nhóm [${targetGroup.title}] hiện tại không có việc nào tồn đọng!`);
+    }
+    
+    let msg = `📋 <b>DANH SÁCH VIỆC NHÓM [${targetGroup.title}]</b>\n\n`;
+    pendingTasks.forEach((t, index) => {
+      const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
+      const recIcon = (t.recurrence && t.recurrence.length > 0) ? ' 🔁' : '';
+      msg += `<b>${index + 1}.</b> ${t.task}${timeStr}${recIcon}\n`;
+    });
+    msg += `\n👉 Gõ <code>/doneto ${targetAliasId} &lt;số&gt;</code> để gạch việc cho nhóm này.`;
+    
+    ctx.reply(msg, { parse_mode: 'HTML' });
+  } catch (err) {
+    ctx.reply('❌ Lỗi khi tải danh sách công việc của nhóm.');
+  }
+});
+
+// Lệnh /doneto: Gạch việc của Nhóm từ chat riêng
+bot.command('doneto', async (ctx) => {
+  if (ctx.chat.type !== 'private') return ctx.reply('Lệnh này chỉ dùng ở chat riêng nha Sếp!');
+  const text = ctx.message.text.replace('/doneto', '').trim();
+  const match = text.match(/^(\d+)\s+(.+)$/);
+  
+  if (!match) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /doneto <Mã Nhóm> <Số thứ tự>\nVí dụ: /doneto 1 1,2');
+  }
+
+  const targetAliasId = parseInt(match[1]);
+  const taskIndicesStr = match[2];
+
+  const targetGroup = await db.getGroupById(targetAliasId);
+  if (!targetGroup) return ctx.reply(`Không tìm thấy nhóm nào có mã số ${targetAliasId}.`);
+
+  const taskIndices = taskIndicesStr.split(/[, ]+/).filter(id => !isNaN(id) && id.trim() !== '');
+  if (taskIndices.length === 0) return ctx.reply('Nhập số thứ tự hợp lệ (chỉ chứa số).');
+
+  try {
+    let pendingTasks = await db.getPendingTasks(targetGroup.chat_id);
+    const now = dayjs().tz('Asia/Ho_Chi_Minh');
+    const todayStr = now.format('YYYY-MM-DD');
+    const currentDayOfWeek = now.day();
+
+    let displayTasks = pendingTasks.filter(t => {
+      if (t.recurrence && t.recurrence.length > 0) {
+        if (t.last_done_date === todayStr) return false;
+        if (!t.recurrence.includes(currentDayOfWeek)) return false;
+      }
+      return true;
+    });
+
+    let successIndices = [];
+    let failedIndices = [];
+
+    for (const idxStr of taskIndices) {
+      const idx = parseInt(idxStr) - 1;
+      if (idx >= 0 && idx < displayTasks.length) {
+        const realId = displayTasks[idx].id;
+        const changes = await db.markTaskDone(targetGroup.chat_id, realId, todayStr);
+        if (changes > 0) successIndices.push(idxStr);
+        else failedIndices.push(idxStr);
+      } else {
+        failedIndices.push(idxStr);
+      }
+    }
+
+    if (successIndices.length > 0) {
+      let successText = successIndices.map(t => `👉 <i>${t}</i>`).join('\n');
+      ctx.reply(`✅ Đã gạch xong việc cho Nhóm [${targetGroup.title}]:\n${successText}`, { parse_mode: 'HTML' });
+    }
+    if (failedIndices.length > 0) {
+      ctx.reply(`❌ Không tìm thấy các việc mang số: ${failedIndices.join(', ')} trong Nhóm [${targetGroup.title}]`);
+    }
+  } catch (err) {
+    ctx.reply('❌ Có lỗi xảy ra, không gạch việc được.');
   }
 });
 
@@ -571,15 +680,21 @@ cron.schedule('* * * * *', async () => {
           return true;
         });
 
-        let msg = `🔔 <b>Tới giờ làm việc rùi nè! (${currentHHMM})</b>\n\n`;
+        let msg = `🔔 <b>Reng reng (${currentHHMM})</b>\n`;
         tasksByChat[chatId].forEach(t => {
-          const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
-          const recIcon = (t.recurrence && t.recurrence.length > 0) ? ' 🔁' : '';
-          msg += `<b>${displayIdx}.</b> ${t.task}${recIcon}\n`;
+          msg += `${t.task}\n`;
         });
-        if (!chatId.toString().startsWith('-')) {
+        
+        // Nhắc tag tất cả mọi người nếu là group
+        if (chatId.toString().startsWith('-')) {
+          const groupTags = await db.getGroupTags(chatId);
+          if (groupTags) {
+            msg += `\n${groupTags}`;
+          }
+        } else {
           msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;
         }
+        
         bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
       }
     }
@@ -607,6 +722,8 @@ const startBot = async () => {
     { command: 'done', description: 'Đánh dấu xong việc (VD: /done 1,2)' },
     { command: 'groups', description: 'Xem mã số các Nhóm' },
     { command: 'addto', description: 'Giao việc cho Nhóm (VD: /addto 1 Giờ Việc)' },
+    { command: 'listto', description: 'Xem việc của Nhóm (VD: /listto 1)' },
+    { command: 'doneto', description: 'Gạch việc của Nhóm (VD: /doneto 1 1,2)' },
     { command: 'report', description: 'Ép gửi Checklist vào Nhóm (VD: /report 1)' },
     { command: 'setall', description: 'Cài đặt tag @all cho Nhóm' },
     { command: 'viewall', description: 'Xem danh sách tag @all của Nhóm' },
