@@ -9,6 +9,29 @@ const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+const parseRecurrence = (text) => {
+  const match = text.match(/\[(.*?)\]/);
+  if (!match) return { recurrence: [], cleanedText: text, label: '' };
+  
+  const bracketContent = match[1].toLowerCase();
+  let recurrence = [];
+  
+  if (bracketContent.includes('daily') || bracketContent.includes('hàng ngày')) {
+    recurrence = [0, 1, 2, 3, 4, 5, 6];
+  } else {
+    if (bracketContent.includes('chủ nhật') || bracketContent.includes('cn')) recurrence.push(0);
+    if (bracketContent.includes('thứ 2') || bracketContent.includes('t2')) recurrence.push(1);
+    if (bracketContent.includes('thứ 3') || bracketContent.includes('t3')) recurrence.push(2);
+    if (bracketContent.includes('thứ 4') || bracketContent.includes('t4')) recurrence.push(3);
+    if (bracketContent.includes('thứ 5') || bracketContent.includes('t5')) recurrence.push(4);
+    if (bracketContent.includes('thứ 6') || bracketContent.includes('t6')) recurrence.push(5);
+    if (bracketContent.includes('thứ 7') || bracketContent.includes('t7')) recurrence.push(6);
+  }
+  
+  const cleanedText = text.replace(/\[.*?\]/, '').trim();
+  return { recurrence, cleanedText, label: match[0] };
+};
+
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // --- XÁC THỰC QUYỀN TRUY CẬP (CHỈ ADMIN) ---
@@ -102,21 +125,21 @@ bot.command('addto', async (ctx) => {
   // Chia tin nhắn thành nhiều dòng, mỗi dòng là một công việc
   const lines = restText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Nếu không có thời gian nào được ghi ra, lưu task không hẹn giờ
-  if (reminderTimes.length === 0) {
-    for (let line of lines) {
-      await db.addTask(targetChatId, line, null);
-    }
-    return ctx.reply(`✅ Dạ Bót đã thêm ${lines.length} việc rùi ạ. (Hông hẹn giờ nhắc)`);
-  }
-
-  // Nếu có hẹn giờ, tạo task riêng cho từng mốc thời gian
+  // Xử lý từng dòng công việc
   let msg = `✅ Dạ Bót đã thêm các việc sau vào nhóm [${targetGroup.title}] rùi nè:\n`;
-  for (let time of reminderTimes) {
-    for (let line of lines) {
-      await db.addTask(targetChatId, line, time);
+  for (let line of lines) {
+    const { recurrence, cleanedText, label } = parseRecurrence(line);
+    const recLabel = label ? ` ${label}` : '';
+    
+    if (reminderTimes.length === 0) {
+      await db.addTask(targetChatId, cleanedText, null, recurrence);
+      msg += `- ${cleanedText}${recLabel}\n`;
+    } else {
+      for (let time of reminderTimes) {
+        await db.addTask(targetChatId, cleanedText, time, recurrence);
+        msg += `- ⏰ ${time}: ${cleanedText}${recLabel}\n`;
+      }
     }
-    msg += `- ⏰ ${time}: ${lines.join(', ')}\n`;
   }
   ctx.reply(msg);
 });
@@ -180,18 +203,21 @@ bot.command('add', async (ctx) => {
         times.push(`${h}:${m}`);
       }
       
+      const { recurrence, cleanedText, label } = parseRecurrence(line);
+      const recLabel = label ? ` ${label}` : '';
+      
       // Xóa thời gian ra khỏi nội dung
-      let taskName = line.replace(timeRegex, '').trim();
+      let taskName = cleanedText.replace(timeRegex, '').trim();
       if (!taskName) taskName = "Công việc không tên";
 
       if (times.length > 0) {
         for (const t of times) {
-          await db.addTask(chatId, taskName, t);
-          replyMsg += `- ⏰ ${t} - ${taskName}\n`;
+          await db.addTask(chatId, taskName, t, recurrence);
+          replyMsg += `- ⏰ ${t} - ${taskName}${recLabel}\n`;
         }
       } else {
-        await db.addTask(chatId, taskName, null);
-        replyMsg += `- ${taskName}\n`;
+        await db.addTask(chatId, taskName, null, recurrence);
+        replyMsg += `- ${taskName}${recLabel}\n`;
       }
     }
     ctx.reply(replyMsg, { parse_mode: 'HTML' });
@@ -204,7 +230,21 @@ bot.command('add', async (ctx) => {
 bot.command('list', async (ctx) => {
   const chatId = ctx.chat.id.toString();
   try {
-    const pendingTasks = await db.getPendingTasks(chatId);
+    let pendingTasks = await db.getPendingTasks(chatId);
+    
+    // Lọc bỏ task lặp lại không thuộc hôm nay hoặc đã làm hôm nay
+    const now = dayjs().tz('Asia/Ho_Chi_Minh');
+    const todayStr = now.format('YYYY-MM-DD');
+    const currentDayOfWeek = now.day();
+    
+    pendingTasks = pendingTasks.filter(t => {
+      if (t.recurrence && t.recurrence.length > 0) {
+        if (t.last_done_date === todayStr) return false;
+        if (!t.recurrence.includes(currentDayOfWeek)) return false;
+      }
+      return true;
+    });
+
     if (pendingTasks.length === 0) {
       return ctx.reply('🎉 Zéeee! Hiện tại hông có việc nào tồn đọng hết á!');
     }
@@ -212,7 +252,8 @@ bot.command('list', async (ctx) => {
     let msg = '📋 <b>DANH SÁCH VIỆC CHƯA LÀM</b>\n\n';
     pendingTasks.forEach((t, index) => {
       const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
-      msg += `<b>${index + 1}.</b> ${t.task}${timeStr}\n`;
+      const recIcon = (t.recurrence && t.recurrence.length > 0) ? ' 🔁' : '';
+      msg += `<b>${index + 1}.</b> ${t.task}${timeStr}${recIcon}\n`;
     });
     msg += '\n👉 A/C gõ <code>/done &lt;số&gt;</code> để đánh dấu xong nha!';
     
@@ -241,12 +282,24 @@ bot.command('done', async (ctx) => {
   try {
     let successIndices = [];
     let failedIndices = [];
+    const now = dayjs().tz('Asia/Ho_Chi_Minh');
+    const todayStr = now.format('YYYY-MM-DD');
+    const currentDayOfWeek = now.day();
+    
+    // Lấy lại danh sách task đang hiển thị (sau khi đã lọc lặp lại) để map đúng số thứ tự
+    let displayTasks = pendingTasks.filter(t => {
+      if (t.recurrence && t.recurrence.length > 0) {
+        if (t.last_done_date === todayStr) return false;
+        if (!t.recurrence.includes(currentDayOfWeek)) return false;
+      }
+      return true;
+    });
 
     for (const idxStr of taskIndices) {
       const idx = parseInt(idxStr) - 1;
-      if (idx >= 0 && idx < pendingTasks.length) {
-        const realId = pendingTasks[idx].id;
-        const changes = await db.markTaskDone(chatId, realId);
+      if (idx >= 0 && idx < displayTasks.length) {
+        const realId = displayTasks[idx].id;
+        const changes = await db.markTaskDone(chatId, realId, todayStr);
         if (changes > 0) {
           successIndices.push(idxStr);
         } else {
@@ -317,7 +370,7 @@ bot.command('setall', async (ctx) => {
   }
 
   await db.setGroupTags(chatId, rawInput);
-  ctx.reply(`✅ Đã lưu danh sách gọi hồn cho Group này:\n${rawInput}`);
+  ctx.reply(`✅ Đã ghi nhớ:\n${rawInput}`);
 });
 
 // Lệnh /viewall: Xem danh sách tag của Group
@@ -417,31 +470,31 @@ cron.schedule('* * * * *', async () => {
 
     for (const chatId of users) {
       await bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
-      const pendingTasks = await db.getPendingTasks(chatId);
+      let pendingTasks = await db.getPendingTasks(chatId);
+      
+      const todayStr = now.format('YYYY-MM-DD');
+      const currentDayOfWeek = now.day();
+      pendingTasks = pendingTasks.filter(t => {
+        if (t.recurrence && t.recurrence.length > 0) {
+          if (t.last_done_date === todayStr) return false;
+          if (!t.recurrence.includes(currentDayOfWeek)) return false;
+        }
+        return true;
+      });
+
       if (pendingTasks.length > 0) {
         let taskMsg = '📋 <b>Các việc Khuii cần hoàn thành hôm nay nè:</b>\n\n';
         pendingTasks.forEach((t, idx) => {
           const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
-          taskMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
+          const recIcon = (t.recurrence && t.recurrence.length > 0) ? ' 🔁' : '';
+          taskMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}${recIcon}\n`;
         });
         await bot.telegram.sendMessage(chatId, taskMsg, { parse_mode: 'HTML' }).catch(console.error);
       }
     }
   }
 
-  // --- 2. BÁO CÁO GROUP (09:00 Thứ 2 - Thứ 6) ---
-  if (currentHHMM === '09:00' && dayOfWeek >= 1 && dayOfWeek <= 5 && groups.length > 0) {
-    for (const chatId of groups) {
-      const pendingTasks = await db.getPendingTasks(chatId);
-      if (pendingTasks.length === 0) continue;
-      let reportMsg = '📊 <b>Checklist Công Việc Hôm Nay</b>\n\nChào buổi sáng cả nhà! Chúc mọi người làm việc siêu hiệu quả nhé. Dưới đây là list việc hôm nay ạ:\n\n';
-      pendingTasks.forEach((t, idx) => {
-        const timeStr = t.reminder_time ? ` (⏰ ${t.reminder_time})` : '';
-        reportMsg += `<b>${idx + 1}.</b> ${t.task}${timeStr}\n`;
-      });
-      bot.telegram.sendMessage(chatId, reportMsg, { parse_mode: 'HTML' }).catch(console.error);
-    }
-  }
+  // --- 2. BÁO CÁO GROUP ĐÃ BỊ XÓA (Sếp Khuii muốn tự thiết lập giờ) ---
 
   // --- 3. NHẮC NHỞ CUỐI NGÀY (17:30) ---
   if (currentHHMM === '17:30' && users.length > 0) {
@@ -485,8 +538,22 @@ cron.schedule('* * * * *', async () => {
 
   // --- 6. NHẮC TASK THEO GIỜ HẸN (MỖI PHÚT) ---
   try {
-    const tasks = await db.getTasksByReminderTime(currentHHMM);
+    let tasks = await db.getTasksByReminderTime(currentHHMM);
     if (tasks.length > 0) {
+      const todayStr = now.format('YYYY-MM-DD');
+      const currentDayOfWeek = now.day();
+      
+      // Lọc các task hợp lệ trong ngày hôm nay
+      tasks = tasks.filter(t => {
+        if (t.recurrence && t.recurrence.length > 0) {
+          if (t.last_done_date === todayStr) return false;
+          if (!t.recurrence.includes(currentDayOfWeek)) return false;
+        }
+        return true;
+      });
+
+      if (tasks.length === 0) return;
+
       const tasksByChat = {};
       tasks.forEach(t => {
         if (!tasksByChat[t.chat_id]) tasksByChat[t.chat_id] = [];
@@ -494,11 +561,21 @@ cron.schedule('* * * * *', async () => {
       });
 
       for (const chatId in tasksByChat) {
-        const allPending = await db.getPendingTasks(chatId);
+        let allPending = await db.getPendingTasks(chatId);
+        // Cần lọc lại danh sách pending để số thứ tự khớp với lệnh /list
+        allPending = allPending.filter(t => {
+          if (t.recurrence && t.recurrence.length > 0) {
+            if (t.last_done_date === todayStr) return false;
+            if (!t.recurrence.includes(currentDayOfWeek)) return false;
+          }
+          return true;
+        });
+
         let msg = `🔔 <b>Tới giờ làm việc rùi nè! (${currentHHMM})</b>\n\n`;
         tasksByChat[chatId].forEach(t => {
           const displayIdx = allPending.findIndex(pt => pt.id === t.id) + 1;
-          msg += `<b>${displayIdx}.</b> ${t.task}\n`;
+          const recIcon = (t.recurrence && t.recurrence.length > 0) ? ' 🔁' : '';
+          msg += `<b>${displayIdx}.</b> ${t.task}${recIcon}\n`;
         });
         if (!chatId.toString().startsWith('-')) {
           msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;

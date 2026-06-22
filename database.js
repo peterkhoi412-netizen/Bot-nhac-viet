@@ -27,6 +27,8 @@ const taskSchema = new mongoose.Schema({
   chat_id: String,
   task: String,
   reminder_time: { type: String, default: null },
+  recurrence: { type: [Number], default: [] }, // 0: Chủ nhật, 1: Thứ 2, ...
+  last_done_date: { type: String, default: null }, // VD: '2026-06-22'
   status: { type: String, default: 'pending' },
   created_at: { type: Date, default: Date.now }
 });
@@ -95,11 +97,12 @@ const getGroupTags = async (chatId) => {
   return group ? group.all_tags : '';
 };
 
-const addTask = async (chatId, taskText, reminderTime = null) => {
+const addTask = async (chatId, taskText, reminderTime = null, recurrence = []) => {
   const newTask = new Task({
     chat_id: chatId,
     task: taskText,
-    reminder_time: reminderTime
+    reminder_time: reminderTime,
+    recurrence: recurrence
   });
   const savedTask = await newTask.save();
   return savedTask.id; // Mongoose tự có thuộc tính id dưới dạng String
@@ -115,10 +118,20 @@ const getTasksByReminderTime = async (timeStr) => {
   return tasks;
 };
 
-const markTaskDone = async (chatId, taskId) => {
+const markTaskDone = async (chatId, taskId, todayStr) => {
   try {
-    const result = await Task.updateOne({ _id: taskId, chat_id: chatId }, { status: 'done' });
-    return result.modifiedCount;
+    const task = await Task.findOne({ _id: taskId, chat_id: chatId });
+    if (!task) return 0;
+    
+    if (task.recurrence && task.recurrence.length > 0) {
+      task.last_done_date = todayStr; // Cập nhật ngày làm xong thay vì chuyển status = 'done'
+      await task.save();
+      return 1;
+    } else {
+      task.status = 'done';
+      await task.save();
+      return 1;
+    }
   } catch (err) {
     // Lỗi có thể xảy ra nếu taskId không đúng chuẩn ObjectId của Mongo
     return 0;
