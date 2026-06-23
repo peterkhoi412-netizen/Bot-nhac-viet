@@ -58,13 +58,16 @@ const checkKTCData = async (bot, db, ctx = null) => {
     }
 
     let missingHubs = [];
+    let processedHubs = new Set();
 
     // Tìm các kho từ cột A
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const khoName = (row[0] || '').trim();
       
-      if (KTC_TAGS[khoName]) {
+      if (KTC_TAGS[khoName] && !processedHubs.has(khoName)) {
+        processedHubs.add(khoName);
+
         // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua
         const cellValue = (row[todayColIndex] || '').trim();
         if (!cellValue || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
@@ -72,6 +75,11 @@ const checkKTCData = async (bot, db, ctx = null) => {
             name: khoName,
             tag: KTC_TAGS[khoName]
           });
+        }
+
+        // Nếu đã quét đủ 5 kho thì dừng luôn, không quét tiếp xuống các bảng bên dưới (ví dụ bảng Monthly)
+        if (processedHubs.size === Object.keys(KTC_TAGS).length) {
+          break;
         }
       }
     }
