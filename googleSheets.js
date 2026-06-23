@@ -88,15 +88,24 @@ const checkKTCData = async (bot, db, ctx = null) => {
       const targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
       const targetGroup = await db.getGroupById(targetAliasId);
       if (targetGroup) {
-        let msg = `🚨 COST/WEIGHT KTC 🚨\n\n`;
-        msg += `Hiện tại Bót phát hiện các Kho sau chưa điền/chưa có số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n\n`;
+        let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các Kho sau chưa điền/chưa có số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n\n`;
         
         missingHubs.forEach(hub => {
           msg += `Kho ${hub.name}: ${hub.tag}\n`;
         });
         
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`;
         msg += `\nCác anh/chị Quản lý kiểm tra và update số liệu giúp Bót nha!`;
-        bot.telegram.sendMessage(targetGroup.chat_id, msg).catch(console.error);
+        
+        bot.telegram.sendMessage(targetGroup.chat_id, msg, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '📊 Mở File KTC', url: sheetUrl }
+              ]
+            ]
+          }
+        }).catch(console.error);
         if (ctx) ctx.reply('✅ Đã check xong! Phát hiện có kho chưa điền và Bót đã bắn thông báo vào Nhóm báo cáo rồi nha!');
       } else {
         if (ctx) ctx.reply('❌ Lỗi: Không tìm thấy Nhóm báo cáo KTC. Sếp kiểm tra lại Mã nhóm trong cấu hình nhé!');
