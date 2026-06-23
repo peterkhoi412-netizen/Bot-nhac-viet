@@ -101,7 +101,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '📊 Mở File KTC', url: sheetUrl }
+                { text: '📊 Mở File KTC - Daily', url: sheetUrl }
               ]
             ]
           }
