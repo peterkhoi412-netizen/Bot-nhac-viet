@@ -3,6 +3,7 @@ const { Telegraf } = require('telegraf');
 const cron = require('node-cron');
 const db = require('./database');
 const calendar = require('./calendar');
+const { checkKTCData } = require('./googleSheets');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
@@ -164,6 +165,12 @@ bot.command('addto', async (ctx) => {
     }
   }
   ctx.reply(msg);
+});
+
+// Lệnh /testktc: Chạy test kiểm tra dữ liệu Google Sheet KTC ngay lập tức
+bot.command('testktc', async (ctx) => {
+  ctx.reply('⏳ Bót đang chui vào Google Sheets kiểm tra dữ liệu KTC, Sếp đợi xíu nha...');
+  await checkKTCData(bot, db);
 });
 
 // Lệnh /report: Ép Bot gửi Checklist vào Group ngay lập tức (dùng cho T7, CN hoặc bất cứ lúc nào)
@@ -572,7 +579,12 @@ cron.schedule('* * * * *', async () => {
     notifiedEvents.clear();
   }
 
-  // --- 1. NHẮC NHỞ BẮT ĐẦU NGÀY MỚI (08:00) ---
+  // --- 1. KIỂM TRA BÁO CÁO KTC TỪ GOOGLE SHEETS (11:30) ---
+  if (currentHHMM === '11:30') {
+    await checkKTCData(bot, db);
+  }
+
+  // --- 2. NHẮC NHỞ BẮT ĐẦU NGÀY MỚI (08:00) ---
   if (currentHHMM === '08:00' && users.length > 0) {
     let msg = '🌅 <b>Chào buổi sáng tốt lành! Chúc A/C một ngày làm việc siêu năng suất nhen 💕</b>\n\n';
     if (events.length > 0) {
