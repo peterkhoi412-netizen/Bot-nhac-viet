@@ -13,7 +13,7 @@ const KTC_TAGS = {
   'M12': '@ThuHa_HRBP'
 };
 
-const checkKTCData = async (bot, db) => {
+const checkKTCData = async (bot, db, ctx = null) => {
   try {
     const auth = new google.auth.GoogleAuth({
       keyFile: './google-credentials.json',
@@ -33,27 +33,27 @@ const checkKTCData = async (bot, db) => {
     const rows = response.data.values;
     if (!rows || rows.length === 0) return;
 
-    // Tìm cột của ngày hôm nay
-    const now = dayjs().tz('Asia/Ho_Chi_Minh');
+    // Tìm cột của ngày hôm qua (N-1) vì báo cáo KTC chốt số liệu của ngày hôm trước
+    const yesterday = dayjs().tz('Asia/Ho_Chi_Minh').subtract(1, 'day');
     // Sheets có thể format ngày là M/D/YYYY hoặc M/DD/YYYY
-    const todayStr1 = now.format('M/D/YYYY');
-    const todayStr2 = now.format('M/DD/YYYY');
-    const todayStr3 = now.format('MM/DD/YYYY');
-    const todayStr4 = now.format('MM/D/YYYY');
+    const targetDateStr1 = yesterday.format('M/D/YYYY');
+    const targetDateStr2 = yesterday.format('M/DD/YYYY');
+    const targetDateStr3 = yesterday.format('MM/DD/YYYY');
+    const targetDateStr4 = yesterday.format('MM/D/YYYY');
     
     // Ngày thường ở dòng 2 (index 1)
     const dateRow = rows[1]; 
     let todayColIndex = -1;
     for (let i = 0; i < dateRow.length; i++) {
       const val = (dateRow[i] || '').trim();
-      if (val === todayStr1 || val === todayStr2 || val === todayStr3 || val === todayStr4) {
+      if (val === targetDateStr1 || val === targetDateStr2 || val === targetDateStr3 || val === targetDateStr4) {
         todayColIndex = i;
         break;
       }
     }
 
     if (todayColIndex === -1) {
-      console.log(`Không tìm thấy cột ngày hôm nay (${todayStr1}) trong Sheet`);
+      console.log(`Không tìm thấy cột ngày hôm qua (${targetDateStr1}) trong Sheet`);
       return;
     }
 
@@ -65,7 +65,7 @@ const checkKTCData = async (bot, db) => {
       const khoName = (row[0] || '').trim();
       
       if (KTC_TAGS[khoName]) {
-        // Lấy giá trị ô Cost/kg ở cột của ngày hôm nay
+        // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua
         const cellValue = (row[todayColIndex] || '').trim();
         if (!cellValue || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
           missingHubs.push({
@@ -80,20 +80,28 @@ const checkKTCData = async (bot, db) => {
       const targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
       const targetGroup = await db.getGroupById(targetAliasId);
       if (targetGroup) {
-        let msg = `🚨 <b>BÁO ĐỘNG KTC 11h30</b> 🚨\n\n`;
-        msg += `Hiện tại Bót phát hiện các Kho sau chưa điền/chưa có số liệu Cost/kg ngày hôm nay (${todayStr1}):\n\n`;
+        let msg = `🚨 COST/WEIGHT KTC 🚨\n\n`;
+        msg += `Hiện tại Bót phát hiện các Kho sau chưa điền/chưa có số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n\n`;
         
         missingHubs.forEach(hub => {
-          msg += `- Kho <b>${hub.name}</b>: ${hub.tag}\n`;
+          msg += `Kho ${hub.name}: ${hub.tag}\n`;
         });
         
         msg += `\nCác anh/chị Quản lý kiểm tra và update số liệu giúp Bót nha!`;
-        bot.telegram.sendMessage(targetGroup.chat_id, msg, { parse_mode: 'HTML' }).catch(console.error);
+        bot.telegram.sendMessage(targetGroup.chat_id, msg).catch(console.error);
+        if (ctx) ctx.reply('✅ Đã check xong! Phát hiện có kho chưa điền và Bót đã bắn thông báo vào Nhóm báo cáo rồi nha!');
+      } else {
+        if (ctx) ctx.reply('❌ Lỗi: Không tìm thấy Nhóm báo cáo KTC. Sếp kiểm tra lại Mã nhóm trong cấu hình nhé!');
       }
+    } else {
+      if (ctx) ctx.reply(`✅ Đã check xong! Quá đỉnh, tất cả các kho đều đã có số liệu Cost/kg của ngày hôm qua (${targetDateStr1})!`);
     }
 
   } catch (error) {
     console.error('Lỗi checkKTCData:', error);
+    if (ctx) {
+      ctx.reply(`❌ Á á, Bót bị vấp té lúc chui vào Google Sheets rùi Sếp ơi!\nLỗi: ${error.message}\n(Sếp kiểm tra lại file Service Account xem có copy thiếu chữ nào không nha)`);
+    }
   }
 };
 

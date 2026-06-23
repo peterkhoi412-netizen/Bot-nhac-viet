@@ -170,7 +170,7 @@ bot.command('addto', async (ctx) => {
 // Lệnh /testktc: Chạy test kiểm tra dữ liệu Google Sheet KTC ngay lập tức
 bot.command('testktc', async (ctx) => {
   ctx.reply('⏳ Bót đang chui vào Google Sheets kiểm tra dữ liệu KTC, Sếp đợi xíu nha...');
-  await checkKTCData(bot, db);
+  await checkKTCData(bot, db, ctx);
 });
 
 // Lệnh /report: Ép Bot gửi Checklist vào Group ngay lập tức (dùng cho T7, CN hoặc bất cứ lúc nào)
