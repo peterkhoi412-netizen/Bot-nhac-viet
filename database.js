@@ -71,6 +71,14 @@ const saveGroup = async (chatId, title = 'Nhóm làm việc') => {
   }
 };
 
+const removeGroup = async (chatId) => {
+  try {
+    await Group.deleteOne({ chat_id: chatId });
+  } catch (err) {
+    console.error('Lỗi removeGroup:', err);
+  }
+};
+
 const getAllGroups = async () => {
   const groups = await Group.find({});
   return groups.map(g => g.chat_id);
@@ -120,18 +128,8 @@ const getTasksByReminderTime = async (timeStr) => {
 
 const markTaskDone = async (chatId, taskId, todayStr) => {
   try {
-    const task = await Task.findOne({ _id: taskId, chat_id: chatId });
-    if (!task) return 0;
-    
-    if (task.recurrence && task.recurrence.length > 0) {
-      task.last_done_date = todayStr; // Cập nhật ngày làm xong thay vì chuyển status = 'done'
-      await task.save();
-      return 1;
-    } else {
-      task.status = 'done';
-      await task.save();
-      return 1;
-    }
+    const result = await Task.updateOne({ _id: taskId, chat_id: chatId }, { status: 'done' });
+    return result.modifiedCount;
   } catch (err) {
     // Lỗi có thể xảy ra nếu taskId không đúng chuẩn ObjectId của Mongo
     return 0;

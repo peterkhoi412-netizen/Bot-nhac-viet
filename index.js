@@ -90,6 +90,16 @@ bot.start(async (ctx) => {
   }
 });
 
+// Lắng nghe sự kiện Bot bị xóa khỏi nhóm hoặc tự rời nhóm
+bot.on('my_chat_member', async (ctx) => {
+  const status = ctx.myChatMember.new_chat_member.status;
+  if (status === 'left' || status === 'kicked') {
+    const chatId = ctx.chat.id.toString();
+    await db.removeGroup(chatId);
+    console.log(`Bot đã rời khỏi nhóm ${ctx.chat.title || chatId} và đã tự động xóa khỏi CSDL.`);
+  }
+});
+
 // Lệnh /groups: Xem danh sách các nhóm đã kết nối
 bot.command('groups', async (ctx) => {
   const groups = await db.getGroupList();
