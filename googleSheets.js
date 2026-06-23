@@ -70,7 +70,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
 
         // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua
         const cellValue = (row[todayColIndex] || '').trim();
-        if (!cellValue || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
+        if (cellValue === '0' || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
           missingHubs.push({
             name: khoName,
             tag: KTC_TAGS[khoName]
