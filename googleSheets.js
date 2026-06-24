@@ -58,6 +58,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
     }
 
     let missingHubs = [];
+    let anomalyHubs = [];
     let processedHubs = new Set();
 
     // Tìm các kho từ cột A
@@ -68,13 +69,37 @@ const checkKTCData = async (bot, db, ctx = null) => {
       if (KTC_TAGS[khoName] && !processedHubs.has(khoName)) {
         processedHubs.add(khoName);
 
-        // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua
-        const cellValue = (row[todayColIndex] || '').trim();
+        // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua (N-1) và ngày hôm trước nữa (N-2)
+        const cellValue = (row[todayColIndex] || '').toString().trim();
+        const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
+
         if (cellValue === '0' || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
           missingHubs.push({
             name: khoName,
             tag: KTC_TAGS[khoName]
           });
+        } else if (cellValue !== '') {
+          // Parse string to float, removing commas if any (e.g. "1,234.5")
+          const currentNum = parseFloat(cellValue.replace(/,/g, ''));
+          const prevNum = parseFloat(prevValue.replace(/,/g, ''));
+
+          if (!isNaN(currentNum) && !isNaN(prevNum)) {
+            let diffPercent = 0;
+            if (prevNum === 0) {
+              if (currentNum !== 0) diffPercent = 100; // Đi từ 0 lên số khác -> tính là lệch 100%
+            } else {
+              diffPercent = Math.abs((currentNum - prevNum) / prevNum) * 100;
+            }
+
+            if (diffPercent > 50) {
+              anomalyHubs.push({
+                name: khoName,
+                tag: KTC_TAGS[khoName],
+                current: cellValue,
+                prev: prevValue
+              });
+            }
+          }
         }
 
         // Nếu đã quét đủ 5 kho thì dừng luôn, không quét tiếp xuống các bảng bên dưới (ví dụ bảng Monthly)
@@ -84,15 +109,25 @@ const checkKTCData = async (bot, db, ctx = null) => {
       }
     }
 
-    if (missingHubs.length > 0) {
+    if (missingHubs.length > 0 || anomalyHubs.length > 0) {
       const targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
       const targetGroup = await db.getGroupById(targetAliasId);
       if (targetGroup) {
-        let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các Kho sau chưa điền/chưa có số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n\n`;
+        let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các vấn đề sau về số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n`;
         
-        missingHubs.forEach(hub => {
-          msg += `Kho ${hub.name}: ${hub.tag}\n`;
-        });
+        if (missingHubs.length > 0) {
+          msg += `\n❌ CHƯA ĐIỀN\n`;
+          missingHubs.forEach(hub => {
+            msg += `Kho ${hub.name}: ${hub.tag}\n`;
+          });
+        }
+
+        if (anomalyHubs.length > 0) {
+          msg += `\n⚠️ CHÊNH LỆCH BẤT THƯỜNG (>50% so với ngày N-2):\n`;
+          anomalyHubs.forEach(hub => {
+            msg += `Kho ${hub.name}: ${hub.tag} (Hôm trước: ${hub.prev} ➔ Hôm qua: ${hub.current})\n`;
+          });
+        }
         
         const sheetUrl = `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`;
         msg += `\nCác anh/chị Quản lý kiểm tra và update số liệu giúp Bót nha!`;
