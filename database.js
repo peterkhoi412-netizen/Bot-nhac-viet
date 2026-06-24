@@ -34,6 +34,12 @@ const taskSchema = new mongoose.Schema({
 });
 const Task = mongoose.model('Task', taskSchema);
 
+const settingSchema = new mongoose.Schema({
+  key: { type: String, unique: true },
+  value: mongoose.Schema.Types.Mixed
+});
+const Setting = mongoose.model('Setting', settingSchema);
+
 // --- FUNCTIONS ---
 
 const saveUser = async (chatId) => {
@@ -136,6 +142,19 @@ const markTaskDone = async (chatId, taskId, todayStr) => {
   }
 };
 
+const getSetting = async (key) => {
+  const setting = await Setting.findOne({ key: key });
+  return setting ? setting.value : null;
+};
+
+const setSetting = async (key, value) => {
+  try {
+    await Setting.updateOne({ key: key }, { value: value }, { upsert: true });
+  } catch (err) {
+    console.error('Lỗi setSetting:', err);
+  }
+};
+
 module.exports = {
   connectDB,
   saveUser,
@@ -149,5 +168,7 @@ module.exports = {
   getTasksByReminderTime,
   markTaskDone,
   setGroupTags,
-  getGroupTags
+  getGroupTags,
+  getSetting,
+  setSetting
 };

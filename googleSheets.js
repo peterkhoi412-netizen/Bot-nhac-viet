@@ -5,16 +5,19 @@ const utc = require('dayjs/plugin/utc');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const KTC_TAGS = {
-  'DT': '@DatPham_2033074',
-  'DX': '@DatPham_2033074',
-  'HY': '@thuychu_14',
-  'XA': '@PhatDao_HRBP',
-  'M12': '@ThuHa_HRBP'
-};
-
 const checkKTCData = async (bot, db, ctx = null) => {
   try {
+    let ktcTags = await db.getSetting('ktc_tags');
+    if (!ktcTags) {
+      ktcTags = {
+        'DT': '@DatPham_2033074',
+        'DX': '@DatPham_2033074',
+        'HY': '@thuychu_14',
+        'XA': '@PhatDao_HRBP',
+        'M12': '@ThuHa_HRBP'
+      };
+    }
+
     const auth = new google.auth.GoogleAuth({
       keyFile: './google-credentials.json',
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
@@ -66,7 +69,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
       const row = rows[i];
       const khoName = (row[0] || '').trim();
       
-      if (KTC_TAGS[khoName] && !processedHubs.has(khoName)) {
+      if (ktcTags[khoName] && !processedHubs.has(khoName)) {
         processedHubs.add(khoName);
 
         // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua (N-1) và ngày hôm trước nữa (N-2)
@@ -76,7 +79,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
         if (cellValue === '0' || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
           missingHubs.push({
             name: khoName,
-            tag: KTC_TAGS[khoName]
+            tag: ktcTags[khoName]
           });
         } else if (cellValue !== '') {
           // Parse string to float, removing commas if any (e.g. "1,234.5")
@@ -94,7 +97,7 @@ const checkKTCData = async (bot, db, ctx = null) => {
             if (diffPercent > 50) {
               anomalyHubs.push({
                 name: khoName,
-                tag: KTC_TAGS[khoName],
+                tag: ktcTags[khoName],
                 current: cellValue,
                 prev: prevValue
               });
@@ -103,14 +106,16 @@ const checkKTCData = async (bot, db, ctx = null) => {
         }
 
         // Nếu đã quét đủ 5 kho thì dừng luôn, không quét tiếp xuống các bảng bên dưới (ví dụ bảng Monthly)
-        if (processedHubs.size === Object.keys(KTC_TAGS).length) {
+        if (processedHubs.size === Object.keys(ktcTags).length) {
           break;
         }
       }
     }
 
     if (missingHubs.length > 0 || anomalyHubs.length > 0) {
-      const targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
+      let targetAliasId = await db.getSetting('ktc_target_group_alias');
+      if (!targetAliasId) targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
+      
       const targetGroup = await db.getGroupById(targetAliasId);
       if (targetGroup) {
         let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các vấn đề sau về số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n`;

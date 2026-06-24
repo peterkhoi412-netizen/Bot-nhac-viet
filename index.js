@@ -725,6 +725,84 @@ const startBot = async () => {
   
   await db.connectDB(mongoUri);
 
+// --- BẢNG ĐIỀU KHIỂN HỆ THỐNG (DASHBOARD) ---
+bot.command('config', async (ctx) => {
+  let msg = `🛠 <b>BẢNG ĐIỀU KHIỂN HỆ THỐNG:</b>\n\n`;
+
+  // 1. KTC Report
+  const ktcTarget = await db.getSetting('ktc_target_group_alias') || process.env.KTC_REPORT_GROUP_ALIAS;
+  const ktcTags = await db.getSetting('ktc_tags') || {
+    'DT': '@DatPham_2033074',
+    'DX': '@DatPham_2033074',
+    'HY': '@thuychu_14',
+    'XA': '@PhatDao_HRBP',
+    'M12': '@ThuHa_HRBP'
+  };
+
+  msg += `<b>1. MÔ-ĐUN: BÁO CÁO COST/WEIGHT KTC</b>\n`;
+  msg += `- Lịch chạy: 11h30 trưa mỗi ngày\n`;
+  msg += `- Nơi nhận báo cáo: Nhóm ${ktcTarget}\n`;
+  msg += `👉 Đổi nhóm: Gõ <code>/setreport cost/weightktc &lt;Mã_Nhóm&gt;</code>\n\n`;
+  msg += `- Danh sách Quản lý:\n`;
+  for (const [kho, tag] of Object.entries(ktcTags)) {
+    msg += `  + Kho ${kho}: ${tag}\n`;
+  }
+  msg += `👉 Đổi quản lý: Gõ <code>/setmanager cost/weightktc &lt;Mã_Kho&gt; &lt;@Tag&gt;</code>\n\n`;
+
+  // 2. Checklist
+  msg += `<b>2. MÔ-ĐUN: NHẮC VIỆC (CHECKLIST)</b>\n`;
+  msg += `- 👉 Xem các nhóm đang theo dõi: Gõ /groups\n`;
+
+  ctx.reply(msg, { parse_mode: 'HTML' });
+});
+
+bot.command('setreport', async (ctx) => {
+  const parts = ctx.message.text.trim().split(/\s+/);
+  if (parts.length < 3) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /setreport <tên_mô_đun> <Mã_Nhóm>\nVí dụ: /setreport cost/weightktc 3');
+  }
+  const moduleName = parts[1].toLowerCase();
+  const aliasId = parseInt(parts[2]);
+
+  if (isNaN(aliasId)) return ctx.reply('Mã Nhóm phải là 1 con số.');
+
+  if (moduleName === 'cost/weightktc') {
+    await db.setSetting('ktc_target_group_alias', aliasId);
+    ctx.reply(`✅ Đã đổi nơi nhận Báo cáo KTC sang Nhóm ${aliasId} thành công!`);
+  } else {
+    ctx.reply(`❌ Hiện tại Bót chưa hỗ trợ mô-đun: ${moduleName}`);
+  }
+});
+
+bot.command('setmanager', async (ctx) => {
+  const parts = ctx.message.text.trim().split(/\s+/);
+  if (parts.length < 4) {
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /setmanager <tên_mô_đun> <Mã_Kho> <@Tag>\nVí dụ: /setmanager cost/weightktc HY @nguoi_moi');
+  }
+  const moduleName = parts[1].toLowerCase();
+  const khoName = parts[2].toUpperCase();
+  const tag = parts.slice(3).join(' ');
+
+  if (moduleName === 'cost/weightktc') {
+    let ktcTags = await db.getSetting('ktc_tags');
+    if (!ktcTags) {
+      ktcTags = {
+        'DT': '@DatPham_2033074',
+        'DX': '@DatPham_2033074',
+        'HY': '@thuychu_14',
+        'XA': '@PhatDao_HRBP',
+        'M12': '@ThuHa_HRBP'
+      };
+    }
+    
+    ktcTags[khoName] = tag;
+    await db.setSetting('ktc_tags', ktcTags);
+    ctx.reply(`✅ Đã cập nhật Quản lý Kho ${khoName} thành ${tag} thành công!`);
+  } else {
+    ctx.reply(`❌ Hiện tại Bót chưa hỗ trợ mô-đun: ${moduleName}`);
+  }
+});
+
   // Thiết lập Menu Lệnh (Gõ / sẽ hiện ra)
   bot.telegram.setMyCommands([
     { command: 'add', description: 'Thêm việc mới cho Khuii' },
@@ -738,6 +816,7 @@ const startBot = async () => {
     { command: 'setall', description: 'Cài đặt tag @all cho Nhóm' },
     { command: 'viewall', description: 'Xem danh sách tag @all của Nhóm' },
     { command: 'say', description: 'Bắt Bót nói trong Nhóm (VD: /say 1 Chào mn)' },
+    { command: 'config', description: 'Bảng Điều Khiển Hệ Thống' },
     { command: 'testcal', description: 'Kiểm tra dữ liệu Lịch Google' },
     { command: 'myid', description: 'Xem Telegram ID của Khuii' }
   ]);
