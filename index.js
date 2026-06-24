@@ -267,7 +267,6 @@ bot.command('list', async (ctx) => {
     
     pendingTasks = pendingTasks.filter(t => {
       if (t.recurrence && t.recurrence.length > 0) {
-        if (t.last_done_date === todayStr) return false;
       }
       return true;
     });
@@ -315,7 +314,6 @@ bot.command('done', async (ctx) => {
     // Lấy lại danh sách task đang hiển thị để map đúng số thứ tự
     let displayTasks = pendingTasks.filter(t => {
       if (t.recurrence && t.recurrence.length > 0) {
-        if (t.last_done_date === todayStr) return false;
       }
       return true;
     });
@@ -368,7 +366,6 @@ bot.command('listto', async (ctx) => {
     
     pendingTasks = pendingTasks.filter(t => {
       if (t.recurrence && t.recurrence.length > 0) {
-        if (t.last_done_date === todayStr) return false;
       }
       return true;
     });
@@ -417,7 +414,6 @@ bot.command('doneto', async (ctx) => {
 
     let displayTasks = pendingTasks.filter(t => {
       if (t.recurrence && t.recurrence.length > 0) {
-        if (t.last_done_date === todayStr) return false;
       }
       return true;
     });
@@ -606,7 +602,6 @@ cron.schedule('* * * * *', async () => {
       const todayStr = now.format('YYYY-MM-DD');
       pendingTasks = pendingTasks.filter(t => {
         if (t.recurrence && t.recurrence.length > 0) {
-          if (t.last_done_date === todayStr) return false;
         }
         return true;
       });
@@ -675,7 +670,6 @@ cron.schedule('* * * * *', async () => {
       // Lọc các task hợp lệ trong ngày hôm nay
       tasks = tasks.filter(t => {
         if (t.recurrence && t.recurrence.length > 0) {
-          if (t.last_done_date === todayStr) return false;
           if (!t.recurrence.includes(currentDayOfWeek)) return false;
         }
         return true;
