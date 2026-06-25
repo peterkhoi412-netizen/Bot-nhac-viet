@@ -75,8 +75,14 @@ const checkKTCData = async (bot, db, ctx = null) => {
         // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua (N-1) và ngày hôm trước nữa (N-2)
         const cellValue = (row[todayColIndex] || '').toString().trim();
         const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
+        
+        // Lấy giá trị ô "So với mục tiêu" (nằm ngay dòng bên dưới dòng Cost/kg)
+        const nextRow = rows[i + 1] || [];
+        const nextCellValue = (nextRow[todayColIndex] || '').toString().trim();
 
-        if (cellValue === '0' || cellValue === '#DIV/0!' || cellValue === '#N/A' || cellValue === '0%') {
+        const errorValues = ['0', '#DIV/0!', '#N/A', '0%'];
+        
+        if (errorValues.includes(cellValue) || errorValues.includes(nextCellValue)) {
           missingHubs.push({
             name: khoName,
             tag: ktcTags[khoName]
