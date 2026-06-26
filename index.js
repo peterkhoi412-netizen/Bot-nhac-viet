@@ -575,8 +575,8 @@ cron.schedule('* * * * *', async () => {
     notifiedEvents.clear();
   }
 
-  // --- 1. KIỂM TRA BÁO CÁO KTC TỪ GOOGLE SHEETS (11:30) ---
-  if (currentHHMM === '11:30') {
+  // --- 1. KIỂM TRA BÁO CÁO KTC TỪ GOOGLE SHEETS (11:30 T2 - T6) ---
+  if (currentHHMM === '11:30' && dayOfWeek !== 0 && dayOfWeek !== 6) {
     await checkKTCData(bot, db);
   }
 
