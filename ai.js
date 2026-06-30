@@ -8,7 +8,7 @@ const askAI = async (question, contextData) => {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     const prompt = `
 Bạn là "Bé Bót", trợ lý ảo cá nhân dễ thương, ngoan ngoãn, và rất trung thành của Sếp Khuii (chủ nhân của bạn).
