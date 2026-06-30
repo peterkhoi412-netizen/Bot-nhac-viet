@@ -127,6 +127,11 @@ const getPendingTasks = async (chatId) => {
   return tasks;
 };
 
+const getAllPendingTasksGlobally = async () => {
+  const tasks = await Task.find({ status: 'pending' }).sort({ created_at: 1 });
+  return tasks;
+};
+
 const getTasksByReminderTime = async (timeStr) => {
   const tasks = await Task.find({ status: 'pending', reminder_time: timeStr });
   return tasks;
@@ -165,6 +170,7 @@ module.exports = {
   getGroupById,
   addTask,
   getPendingTasks,
+  getAllPendingTasksGlobally,
   getTasksByReminderTime,
   markTaskDone,
   setGroupTags,

@@ -5,7 +5,7 @@ const utc = require('dayjs/plugin/utc');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const checkKTCData = async (bot, db, ctx = null) => {
+const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
   try {
     let ktcTags = await db.getSetting('ktc_tags');
     if (!ktcTags) {
@@ -127,6 +127,21 @@ const checkKTCData = async (bot, db, ctx = null) => {
         if (processedHubs.size === Object.keys(ktcTags).length) {
           break;
         }
+      }
+    }
+
+    if (isForAI) {
+      if (missingHubs.length > 0 || anomalyHubs.length > 0) {
+        let aiMsg = `Tình trạng điền báo cáo COST/WEIGHT KTC ngày hôm qua (${targetDateStr1}):\n`;
+        if (missingHubs.length > 0) {
+          aiMsg += `- Các kho CHƯA ĐIỀN: ${missingHubs.map(h => h.name).join(', ')}\n`;
+        }
+        if (anomalyHubs.length > 0) {
+          aiMsg += `- Các kho bị LỆCH BẤT THƯỜNG (>50%): ${anomalyHubs.map(h => h.name).join(', ')}\n`;
+        }
+        return aiMsg;
+      } else {
+        return `Tất cả các kho đều đã điền đủ số liệu KTC COST/WEIGHT ngày hôm qua (${targetDateStr1}) và không có lệch bất thường.`;
       }
     }
 

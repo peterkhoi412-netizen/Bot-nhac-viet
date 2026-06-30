@@ -64,8 +64,8 @@ bot.use(async (ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
       return ctx.reply('Em là Bót ngoan xink iu của anh Khui và chỉ nghe nời ảnh thoi ạ hihi <3');
     }
-    // Các tin nhắn chat bình thường trong group thì bơ đi
-    return;
+    // Các tin nhắn chat bình thường trong group thì cho phép đi tiếp để xài AI
+    return next();
   }
 
   return next();
@@ -831,11 +831,13 @@ bot.command('setmanager', async (ctx) => {
 
     const isPrivate = ctx.chat.type === 'private';
     const isReplyToBot = ctx.message.reply_to_message && ctx.message.reply_to_message.from.id === ctx.botInfo.id;
-    const isMentioningBot = text.includes(`@${ctx.botInfo.username}`);
+    const botUsername = ctx.botInfo.username.toLowerCase();
+    const isMentioningBot = text.toLowerCase().includes(`@${botUsername}`);
 
     // Chỉ phản hồi nếu: chat riêng, hoặc bị tag, hoặc bị reply trong group
     if (isPrivate || isReplyToBot || isMentioningBot) {
-      const cleanQuestion = text.replace(`@${ctx.botInfo.username}`, '').trim();
+      // Dùng regex để replace không phân biệt hoa thường
+      const cleanQuestion = text.replace(new RegExp(`@${botUsername}`, 'gi'), '').trim();
       if (cleanQuestion === '') return; // Chỉ tag tên mà ko nói gì
 
       ctx.sendChatAction('typing');
@@ -843,17 +845,25 @@ bot.command('setmanager', async (ctx) => {
       // Thu thập Dữ liệu (Context)
       let contextData = '';
       try {
-        const pendingTasks = await db.getPendingTasks(ctx.chat.id.toString());
-        if (pendingTasks && pendingTasks.length > 0) {
-          contextData += `Danh sách công việc chưa làm ở kênh chat này:\n`;
-          pendingTasks.forEach((t, i) => {
-            contextData += `${i + 1}. ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
+        // 1. Thêm TẤT CẢ công việc từ TẤT CẢ các nhóm
+        const allPendingTasks = await db.getAllPendingTasksGlobally();
+        if (allPendingTasks && allPendingTasks.length > 0) {
+          contextData += `Danh sách TẤT CẢ công việc chưa làm trên Toàn Hệ Thống:\n`;
+          allPendingTasks.forEach((t, i) => {
+            contextData += `${i + 1}. [Nhóm ${t.chat_id}] ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
           });
+          contextData += `\n`;
         } else {
-          contextData += `Kênh chat này hiện tại không có công việc nào tồn đọng.\n`;
+          contextData += `Hệ thống hiện tại không có công việc nào tồn đọng.\n\n`;
+        }
+
+        // 2. Thêm tình trạng Báo cáo COST/WEIGHT KTC (từ Google Sheets)
+        const ktcReportText = await checkKTCData(bot, db, null, true);
+        if (ktcReportText) {
+          contextData += `--- BÁO CÁO KTC ---\n${ktcReportText}\n`;
         }
       } catch (e) {
-        console.error('Lỗi lấy context task:', e);
+        console.error('Lỗi lấy context cho AI:', e);
       }
 
       const answer = await ai.askAI(cleanQuestion, contextData);
