@@ -845,7 +845,7 @@ bot.command('setmanager', async (ctx) => {
       // Thu thập Dữ liệu (Context)
       let contextData = '';
       try {
-        // 1. Thêm TẤT CẢ công việc từ TẤT CẢ các nhóm
+        // 1. Thêm TẤT CẢ công việc từ TẤT CẢ các nhóm (MongoDB chạy rất nhanh nên lấy luôn)
         const allPendingTasks = await db.getAllPendingTasksGlobally();
         if (allPendingTasks && allPendingTasks.length > 0) {
           contextData += `Danh sách TẤT CẢ công việc chưa làm trên Toàn Hệ Thống:\n`;
@@ -857,10 +857,15 @@ bot.command('setmanager', async (ctx) => {
           contextData += `Hệ thống hiện tại không có công việc nào tồn đọng.\n\n`;
         }
 
-        // 2. Thêm tình trạng Báo cáo COST/WEIGHT KTC (từ Google Sheets)
-        const ktcReportText = await checkKTCData(bot, db, null, true);
-        if (ktcReportText) {
-          contextData += `--- BÁO CÁO KTC ---\n${ktcReportText}\n`;
+        // 2. TỐI ƯU TỐC ĐỘ: Chỉ gọi Google Sheets (chạy rất chậm) nếu câu hỏi có nhắc tới KTC, cost, weight, báo cáo, kho
+        const lowerQ = cleanQuestion.toLowerCase();
+        const needsKTC = lowerQ.includes('cost') || lowerQ.includes('weight') || lowerQ.includes('ktc') || lowerQ.includes('báo cáo') || lowerQ.includes('kho') || lowerQ.includes('điền');
+        
+        if (needsKTC) {
+          const ktcReportText = await checkKTCData(bot, db, null, true);
+          if (ktcReportText) {
+            contextData += `--- BÁO CÁO KTC ---\n${ktcReportText}\n`;
+          }
         }
       } catch (e) {
         console.error('Lỗi lấy context cho AI:', e);
