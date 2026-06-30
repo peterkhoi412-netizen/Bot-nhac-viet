@@ -23,7 +23,11 @@ const checkKTCData = async (bot, db, ctx = null) => {
     };
 
     if (process.env.GOOGLE_CREDENTIALS_BASE64) {
-      authOptions.credentials = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
+      const creds = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
+      if (creds.private_key) {
+        creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+      }
+      authOptions.credentials = creds;
     } else {
       authOptions.keyFile = './google-credentials.json';
     }
