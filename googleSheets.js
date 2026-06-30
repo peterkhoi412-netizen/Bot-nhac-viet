@@ -18,10 +18,17 @@ const checkKTCData = async (bot, db, ctx = null) => {
       };
     }
 
-    const auth = new google.auth.GoogleAuth({
-      keyFile: './google-credentials.json',
+    let authOptions = {
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
+    };
+
+    if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+      authOptions.credentials = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
+    } else {
+      authOptions.keyFile = './google-credentials.json';
+    }
+
+    const auth = new google.auth.GoogleAuth(authOptions);
 
     const sheets = google.sheets({ version: 'v4', auth });
     const sheetId = process.env.GOOGLE_SHEET_ID;
