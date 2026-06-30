@@ -31,8 +31,8 @@ const checkKTCData = async (bot, db, ctx = null) => {
     const auth = new google.auth.GoogleAuth(authOptions);
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const sheetId = process.env.GOOGLE_SHEET_ID;
-    const sheetName = process.env.GOOGLE_SHEET_NAME;
+    const sheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
+    const sheetName = (process.env.GOOGLE_SHEET_NAME || '').trim();
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
