@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const db = require('./database');
 const calendar = require('./calendar');
 const { checkKTCData } = require('./googleSheets');
+const ai = require('./ai');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
@@ -820,6 +821,45 @@ bot.command('setmanager', async (ctx) => {
     { command: 'testcal', description: 'Kiểm tra dữ liệu Lịch Google' },
     { command: 'myid', description: 'Xem Telegram ID của Khuii' }
   ]);
+
+  // --- TRÍ TUỆ NHÂN TẠO (AI) ---
+  bot.on('text', async (ctx) => {
+    const text = ctx.message.text;
+    
+    // Bỏ qua nếu là câu lệnh
+    if (text.startsWith('/')) return;
+
+    const isPrivate = ctx.chat.type === 'private';
+    const isReplyToBot = ctx.message.reply_to_message && ctx.message.reply_to_message.from.id === ctx.botInfo.id;
+    const isMentioningBot = text.includes(`@${ctx.botInfo.username}`);
+
+    // Chỉ phản hồi nếu: chat riêng, hoặc bị tag, hoặc bị reply trong group
+    if (isPrivate || isReplyToBot || isMentioningBot) {
+      const cleanQuestion = text.replace(`@${ctx.botInfo.username}`, '').trim();
+      if (cleanQuestion === '') return; // Chỉ tag tên mà ko nói gì
+
+      ctx.sendChatAction('typing');
+
+      // Thu thập Dữ liệu (Context)
+      let contextData = '';
+      try {
+        const pendingTasks = await db.getPendingTasks(ctx.chat.id.toString());
+        if (pendingTasks && pendingTasks.length > 0) {
+          contextData += `Danh sách công việc chưa làm ở kênh chat này:\n`;
+          pendingTasks.forEach((t, i) => {
+            contextData += `${i + 1}. ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
+          });
+        } else {
+          contextData += `Kênh chat này hiện tại không có công việc nào tồn đọng.\n`;
+        }
+      } catch (e) {
+        console.error('Lỗi lấy context task:', e);
+      }
+
+      const answer = await ai.askAI(cleanQuestion, contextData);
+      ctx.reply(answer, { reply_to_message_id: ctx.message.message_id });
+    }
+  });
 
   bot.launch().then(() => {
     console.log('Bot is running...');
