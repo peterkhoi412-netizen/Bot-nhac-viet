@@ -18,18 +18,19 @@ const checkKTCData = async (bot, db, ctx = null) => {
       };
     }
 
+    const fs = require('fs');
     let authOptions = {
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     };
 
-    if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+    if (fs.existsSync('./google-credentials.json')) {
+      authOptions.keyFile = './google-credentials.json';
+    } else if (process.env.GOOGLE_CREDENTIALS_BASE64) {
       const creds = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
       if (creds.private_key) {
         creds.private_key = creds.private_key.replace(/\\n/g, '\n');
       }
       authOptions.credentials = creds;
-    } else {
-      authOptions.keyFile = './google-credentials.json';
     }
 
     const auth = new google.auth.GoogleAuth(authOptions);
