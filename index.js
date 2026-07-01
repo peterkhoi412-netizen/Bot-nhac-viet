@@ -845,16 +845,29 @@ bot.command('setmanager', async (ctx) => {
       // Thu thập Dữ liệu (Context)
       let contextData = '';
       try {
-        // 1. Thêm TẤT CẢ công việc từ TẤT CẢ các nhóm (MongoDB chạy rất nhanh nên lấy luôn)
-        const allPendingTasks = await db.getAllPendingTasksGlobally();
-        if (allPendingTasks && allPendingTasks.length > 0) {
-          contextData += `Danh sách TẤT CẢ công việc chưa làm trên Toàn Hệ Thống:\n`;
-          allPendingTasks.forEach((t, i) => {
-            contextData += `${i + 1}. [Nhóm ${t.chat_id}] ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
-          });
-          contextData += `\n`;
+        // 1. Thêm công việc chưa làm (Bảo mật: Nhóm nào chỉ biết việc nhóm đó, Chat riêng thì biết hết)
+        if (isPrivate) {
+          const allPendingTasks = await db.getAllPendingTasksGlobally();
+          if (allPendingTasks && allPendingTasks.length > 0) {
+            contextData += `Danh sách TẤT CẢ công việc chưa làm trên Toàn Hệ Thống:\n`;
+            allPendingTasks.forEach((t, i) => {
+              contextData += `${i + 1}. [Nhóm ${t.chat_id}] ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
+            });
+            contextData += `\n`;
+          } else {
+            contextData += `Hệ thống hiện tại không có công việc nào tồn đọng.\n\n`;
+          }
         } else {
-          contextData += `Hệ thống hiện tại không có công việc nào tồn đọng.\n\n`;
+          const groupPendingTasks = await db.getPendingTasks(ctx.chat.id.toString());
+          if (groupPendingTasks && groupPendingTasks.length > 0) {
+            contextData += `Danh sách công việc chưa làm CỦA NHÓM NÀY:\n`;
+            groupPendingTasks.forEach((t, i) => {
+              contextData += `${i + 1}. ${t.task} ${t.reminder_time ? '(Giờ nhắc: ' + t.reminder_time + ')' : ''}\n`;
+            });
+            contextData += `\n`;
+          } else {
+            contextData += `Nhóm này hiện tại không có công việc nào tồn đọng.\n\n`;
+          }
         }
 
         // 2. TỐI ƯU TỐC ĐỘ: Chỉ gọi Google Sheets (chạy rất chậm) nếu câu hỏi có nhắc tới KTC, cost, weight, báo cáo, kho
