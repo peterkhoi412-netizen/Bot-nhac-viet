@@ -100,9 +100,11 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
             tag: ktcTags[khoName]
           });
         } else if (cellValue !== '') {
-          // Parse string to float, removing commas if any (e.g. "1,234.5")
-          const currentNum = parseFloat(cellValue.replace(/,/g, ''));
-          const prevNum = parseFloat(prevValue.replace(/,/g, ''));
+          // Parse string to float aggressively
+          const cleanCurrent = cellValue.replace(/[^0-9.-]+/g, "");
+          const cleanPrev = prevValue.replace(/[^0-9.-]+/g, "");
+          const currentNum = parseFloat(cleanCurrent);
+          const prevNum = parseFloat(cleanPrev);
 
           if (!isNaN(currentNum) && !isNaN(prevNum)) {
             let diffPercent = 0;
@@ -112,7 +114,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
               diffPercent = Math.abs((currentNum - prevNum) / prevNum) * 100;
             }
 
-            if (diffPercent > 50) {
+            if (diffPercent >= 50) {
               anomalyHubs.push({
                 name: khoName,
                 tag: ktcTags[khoName],
