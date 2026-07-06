@@ -884,8 +884,15 @@ bot.command('setmanager', async (ctx) => {
         console.error('Lỗi lấy context cho AI:', e);
       }
 
-      const answer = await ai.askAI(cleanQuestion, contextData);
-      ctx.reply(answer, { reply_to_message_id: ctx.message.message_id });
+      // Chạy AI ngầm (không dùng await) để tránh lỗi Timeout 90s của Telegraf
+      ai.askAI(cleanQuestion, contextData)
+        .then(answer => {
+          ctx.reply(answer, { reply_to_message_id: ctx.message.message_id }).catch(console.error);
+        })
+        .catch(err => {
+          console.error('Lỗi Gemini AI:', err);
+          ctx.reply('Dạ nãy giờ đường truyền lên não Gemini bị kẹt mạng, Sếp hỏi lại giúp em nha!', { reply_to_message_id: ctx.message.message_id }).catch(console.error);
+        });
     }
   });
 
