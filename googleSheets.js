@@ -74,6 +74,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
 
     let missingHubs = [];
     let anomalyHubs = [];
+    let historicalAnomalyHubs = {};
     let processedHubs = new Set();
 
     // Tìm các kho từ cột A
@@ -125,6 +126,51 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
           }
         }
 
+        // Quét lịch sử 30 ngày (từ N-2 lùi về N-31)
+        const startCol = Math.max(1, todayColIndex - 30);
+        for (let col = todayColIndex - 1; col >= startCol; col--) {
+          const histCellVal = (row[col] || '').toString().trim();
+          const histPrevVal = (row[col - 1] || '').toString().trim();
+          
+          if (histCellVal !== '' && histPrevVal !== '') {
+            const cleanHistCurr = histCellVal.replace(/[^0-9.-]+/g, "");
+            const cleanHistPrev = histPrevVal.replace(/[^0-9.-]+/g, "");
+            const histCurrNum = parseFloat(cleanHistCurr);
+            const histPrevNum = parseFloat(cleanHistPrev);
+
+            if (!isNaN(histCurrNum) && !isNaN(histPrevNum)) {
+              let diffPercent = 0;
+              if (histPrevNum === 0) {
+                if (histCurrNum !== 0) diffPercent = 100;
+              } else {
+                diffPercent = Math.abs((histCurrNum - histPrevNum) / histPrevNum) * 100;
+              }
+
+              if (diffPercent >= 50) {
+                if (!historicalAnomalyHubs[khoName]) {
+                  historicalAnomalyHubs[khoName] = {
+                    tag: ktcTags[khoName],
+                    anomalies: []
+                  };
+                }
+                
+                // Format ngày (từ rows[1])
+                let dateStr = (rows[1][col] || '').toString().trim();
+                const dateParts = dateStr.split('/');
+                if (dateParts.length >= 2) {
+                  dateStr = `${dateParts[1].padStart(2, '0')}/${dateParts[0]}`; // MM/DD -> DD/MM
+                }
+                
+                historicalAnomalyHubs[khoName].anomalies.push({
+                  date: dateStr,
+                  current: histCellVal,
+                  prev: histPrevVal
+                });
+              }
+            }
+          }
+        }
+
         // Nếu đã quét đủ 5 kho thì dừng luôn, không quét tiếp xuống các bảng bên dưới (ví dụ bảng Monthly)
         if (processedHubs.size === Object.keys(ktcTags).length) {
           break;
@@ -133,13 +179,25 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
     }
 
     if (isForAI) {
-      if (missingHubs.length > 0 || anomalyHubs.length > 0) {
+      if (missingHubs.length > 0 || anomalyHubs.length > 0 || Object.keys(historicalAnomalyHubs).length > 0) {
         let aiMsg = `Tình trạng điền báo cáo COST/WEIGHT KTC ngày hôm qua (${targetDateStr1}):\n`;
         if (missingHubs.length > 0) {
           aiMsg += `- Các kho CHƯA ĐIỀN: ${missingHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
         }
         if (anomalyHubs.length > 0) {
-          aiMsg += `- Các kho bị LỆCH BẤT THƯỜNG (>50%): ${anomalyHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
+          aiMsg += `- Các kho bị LỆCH BẤT THƯỜNG (>50% so với ngày N-2): ${anomalyHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
+        }
+        if (Object.keys(historicalAnomalyHubs).length > 0) {
+          aiMsg += `- LỊCH SỬ LỖI CHÊNH LỆCH (>50%, 30 ngày qua):\n`;
+          for (const kho of Object.keys(historicalAnomalyHubs)) {
+             const data = historicalAnomalyHubs[kho];
+             aiMsg += `  + Kho ${kho} (Quản lý: ${data.tag}):\n`;
+             // Reverse to show oldest to newest (or newest to oldest). We looped backwards, so anomalies are newest first. Let's reverse them so it reads chronologically.
+             const reversed = [...data.anomalies].reverse();
+             reversed.forEach(a => {
+               aiMsg += `    * Ngày ${a.date} (Hôm trước: ${a.prev} ➔ Hôm đó: ${a.current})\n`;
+             });
+          }
         }
         return aiMsg;
       } else {
@@ -147,7 +205,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
       }
     }
 
-    if (missingHubs.length > 0 || anomalyHubs.length > 0) {
+    if (missingHubs.length > 0 || anomalyHubs.length > 0 || Object.keys(historicalAnomalyHubs).length > 0) {
       let targetAliasId = await db.getSetting('ktc_target_group_alias');
       if (!targetAliasId) targetAliasId = parseInt(process.env.KTC_REPORT_GROUP_ALIAS);
       
@@ -167,6 +225,18 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
           anomalyHubs.forEach(hub => {
             msg += `Kho ${hub.name}: ${hub.tag} (Hôm trước: ${hub.prev} ➔ Hôm qua: ${hub.current})\n`;
           });
+        }
+
+        if (Object.keys(historicalAnomalyHubs).length > 0) {
+          msg += `\n🕰 LỊCH SỬ LỖI CHÊNH LỆCH (Quét 30 ngày gần nhất):\n`;
+          for (const kho of Object.keys(historicalAnomalyHubs)) {
+            const data = historicalAnomalyHubs[kho];
+            msg += `Kho ${kho}: ${data.tag}\n`;
+            const reversedAnomalies = [...data.anomalies].reverse();
+            reversedAnomalies.forEach(a => {
+              msg += ` - Ngày ${a.date} (Hôm trước: ${a.prev} ➔ Hôm đó: ${a.current})\n`;
+            });
+          }
         }
         
         const sheetUrl = `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`;
