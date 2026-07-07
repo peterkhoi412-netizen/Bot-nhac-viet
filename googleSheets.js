@@ -146,7 +146,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
                 diffPercent = Math.abs((histCurrNum - histPrevNum) / histPrevNum) * 100;
               }
 
-              if (diffPercent > 60) {
+              if (diffPercent > 80) {
                 if (!historicalAnomalyHubs[khoName]) {
                   historicalAnomalyHubs[khoName] = {
                     tag: ktcTags[khoName],
@@ -188,7 +188,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
           aiMsg += `- Các kho bị LỆCH BẤT THƯỜNG (>50% so với ngày N-2): ${anomalyHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
         }
         if (Object.keys(historicalAnomalyHubs).length > 0) {
-          aiMsg += `- LỊCH SỬ LỖI CHÊNH LỆCH (>60%, 30 ngày qua):\n`;
+          aiMsg += `- LỊCH SỬ LỖI CHÊNH LỆCH (>80%, 30 ngày qua):\n`;
           for (const kho of Object.keys(historicalAnomalyHubs)) {
              const data = historicalAnomalyHubs[kho];
              aiMsg += `  + Kho ${kho} (Quản lý: ${data.tag}):\n`;
@@ -228,7 +228,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
         }
 
         if (Object.keys(historicalAnomalyHubs).length > 0) {
-          msg += `\n🕰 LỊCH SỬ LỖI CHÊNH LỆCH (>60% trong 30 ngày qua):\n`;
+          msg += `\n🕰 LỊCH SỬ LỖI CHÊNH LỆCH (trong 30 ngày qua):\n`;
           for (const kho of Object.keys(historicalAnomalyHubs)) {
             const data = historicalAnomalyHubs[kho];
             msg += `Kho ${kho}: ${data.tag}\n`;
