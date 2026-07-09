@@ -7,15 +7,19 @@ dayjs.extend(timezone);
 
 const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
   try {
+    const defaultTags = {
+      'DT': '@DatPham_2033074',
+      'DX': '@DatPham_2033074',
+      'HY': '@thuychu_14',
+      'XA': '@PhatDao_HRBP',
+      'M12': '@ThuHa_HRBP'
+    };
+
     let ktcTags = await db.getSetting('ktc_tags');
-    if (!ktcTags) {
-      ktcTags = {
-        'DT': '@DatPham_2033074',
-        'DX': '@DatPham_2033074',
-        'HY': '@thuychu_14',
-        'XA': '@PhatDao_HRBP',
-        'M12': '@ThuHa_HRBP'
-      };
+    if (!ktcTags || typeof ktcTags !== 'object') {
+      ktcTags = { ...defaultTags };
+    } else {
+      ktcTags = { ...defaultTags, ...ktcTags };
     }
 
     const fs = require('fs');
@@ -93,14 +97,14 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
         const nextRow = rows[i + 1] || [];
         const nextCellValue = (nextRow[todayColIndex] || '').toString().trim();
 
-        const errorValues = ['0', '#DIV/0!', '#N/A', '0%'];
+        const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
         
-        if (errorValues.includes(cellValue) || errorValues.includes(nextCellValue)) {
+        if (cellValue === '' || nextCellValue === '' || errorValues.includes(cellValue) || errorValues.includes(nextCellValue)) {
           missingHubs.push({
             name: khoName,
             tag: ktcTags[khoName]
           });
-        } else if (cellValue !== '') {
+        } else {
           // Parse string to float aggressively
           const cleanCurrent = cellValue.replace(/[^0-9.-]+/g, "");
           const cleanPrev = prevValue.replace(/[^0-9.-]+/g, "");

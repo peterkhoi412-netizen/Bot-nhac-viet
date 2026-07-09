@@ -785,16 +785,19 @@ bot.command('setmanager', async (ctx) => {
   const tag = parts.slice(3).join(' ');
 
   if (moduleName === 'cost/weightktc') {
-    let ktcTags = await db.getSetting('ktc_tags');
-    if (!ktcTags) {
-      ktcTags = {
+      const defaultTags = {
         'DT': '@DatPham_2033074',
         'DX': '@DatPham_2033074',
         'HY': '@thuychu_14',
         'XA': '@PhatDao_HRBP',
         'M12': '@ThuHa_HRBP'
       };
-    }
+      let ktcTags = await db.getSetting('ktc_tags');
+      if (!ktcTags || typeof ktcTags !== 'object') {
+        ktcTags = { ...defaultTags };
+      } else {
+        ktcTags = { ...defaultTags, ...ktcTags };
+      }
     
     ktcTags[khoName] = tag;
     await db.setSetting('ktc_tags', ktcTags);
