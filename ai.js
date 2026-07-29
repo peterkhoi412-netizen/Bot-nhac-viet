@@ -80,7 +80,7 @@ ${contextData}
     let response = result.response;
     
     // Vòng lặp xử lý Function Calling
-    while (response.functionCalls && response.functionCalls().length > 0) {
+    while (response.functionCalls && response.functionCalls() && response.functionCalls().length > 0) {
       const calls = response.functionCalls();
       const functionResponses = [];
 
