@@ -52,7 +52,7 @@ const askAI = async (question, contextData, bot, db, ctx) => {
     ];
 
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
+      model: "gemini-flash-latest",
       tools: tools
     });
 
@@ -80,8 +80,16 @@ ${contextData}
     let response = result.response;
     
     // Vòng lặp xử lý Function Calling
-    while (response.functionCalls && response.functionCalls() && response.functionCalls().length > 0) {
-      const calls = response.functionCalls();
+    while (true) {
+      let calls;
+      if (typeof response.functionCalls === 'function') {
+        calls = response.functionCalls();
+      } else {
+        calls = response.functionCalls;
+      }
+      
+      if (!calls || calls.length === 0) break;
+
       const functionResponses = [];
 
       for (const call of calls) {
@@ -142,7 +150,7 @@ ${contextData}
     return response.text();
   } catch (error) {
     console.error("Lỗi Gemini AI Agent:", error);
-    return "Dạ não AI của em đang bị kẹt xíu do lỗi kết nối hoặc xử lý công cụ, Sếp đợi tí hỏi lại nha!";
+    return `Dạ não AI của em đang bị kẹt xíu do lỗi: ${error.message}`;
   }
 };
 
