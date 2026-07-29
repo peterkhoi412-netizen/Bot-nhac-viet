@@ -80,13 +80,14 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
     let anomalyHubs = [];
     let historicalAnomalyHubs = {};
     let processedHubs = new Set();
+    let allHubsData = []; // Mảng chứa toàn bộ dữ liệu thô của tất cả các kho
 
     // Tìm các kho từ cột A
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const khoName = (row[0] || '').trim();
       
-      if (ktcTags[khoName] && !processedHubs.has(khoName)) {
+      if (ktcTags.hasOwnProperty(khoName) && !processedHubs.has(khoName)) {
         processedHubs.add(khoName);
 
         // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua (N-1) và ngày hôm trước nữa (N-2)
@@ -118,6 +119,15 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
             } else {
               diffPercent = Math.abs((currentNum - prevNum) / prevNum) * 100;
             }
+            
+            // Lưu dữ liệu thô vào mảng allHubsData
+            allHubsData.push({
+              name: khoName,
+              tag: ktcTags[khoName],
+              cost_yesterday: currentNum,
+              cost_prev: prevNum,
+              diff_percent: Math.round(diffPercent)
+            });
 
             if (diffPercent >= 50) {
               anomalyHubs.push({
@@ -183,30 +193,13 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
     }
 
     if (isForAI) {
-      if (missingHubs.length > 0 || anomalyHubs.length > 0 || Object.keys(historicalAnomalyHubs).length > 0) {
-        let aiMsg = `Tình trạng điền báo cáo COST/WEIGHT KTC ngày hôm qua (${targetDateStr1}):\n`;
-        if (missingHubs.length > 0) {
-          aiMsg += `- Các kho CHƯA ĐIỀN: ${missingHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
-        }
-        if (anomalyHubs.length > 0) {
-          aiMsg += `- Các kho bị LỆCH BẤT THƯỜNG (>50% so với ngày N-2): ${anomalyHubs.map(h => `${h.name} (Quản lý: ${h.tag})`).join(', ')}\n`;
-        }
-        if (Object.keys(historicalAnomalyHubs).length > 0) {
-          aiMsg += `- LỊCH SỬ LỖI CHÊNH LỆCH (>80%, 30 ngày qua):\n`;
-          for (const kho of Object.keys(historicalAnomalyHubs)) {
-             const data = historicalAnomalyHubs[kho];
-             aiMsg += `  + Kho ${kho} (Quản lý: ${data.tag}):\n`;
-             // Reverse to show oldest to newest (or newest to oldest). We looped backwards, so anomalies are newest first. Let's reverse them so it reads chronologically.
-             const reversed = [...data.anomalies].reverse();
-             reversed.forEach(a => {
-               aiMsg += `    * Ngày ${a.date} (Hôm trước: ${a.prev} ➔ Hôm đó: ${a.current})\n`;
-             });
-          }
-        }
-        return aiMsg;
-      } else {
-        return `Tất cả các kho đều đã điền đủ số liệu KTC COST/WEIGHT ngày hôm qua (${targetDateStr1}) và không có lệch bất thường.`;
-      }
+      return {
+        report_date: targetDateStr1,
+        all_hubs_data: allHubsData,
+        missing_hubs: missingHubs,
+        anomaly_hubs: anomalyHubs,
+        historical_anomalies: historicalAnomalyHubs
+      };
     }
 
     if (missingHubs.length > 0 || anomalyHubs.length > 0 || Object.keys(historicalAnomalyHubs).length > 0) {
