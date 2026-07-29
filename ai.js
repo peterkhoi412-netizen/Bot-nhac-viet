@@ -130,9 +130,11 @@ ${contextData}
       systemInstruction: systemInstruction
     });
 
-    const chat = model.startChat({});
+    let contents = [
+      { role: "user", parts: [{ text: question }] }
+    ];
 
-    let result = await chat.sendMessage(question);
+    let result = await model.generateContent({ contents });
     let response = result.response;
     
     // Vòng lặp xử lý Function Calling
@@ -223,14 +225,26 @@ ${contextData}
         });
       }
 
-      // Gửi kết quả của hàm trả lại cho Gemini
-      result = await chat.sendMessage(functionResponses);
+      // Lưu functionCall của model vào history
+      contents.push({
+        role: "model",
+        parts: calls.map(c => ({ functionCall: { name: c.name, args: c.args } }))
+      });
+
+      // Lưu functionResponse của user vào history
+      contents.push({
+        role: "user", // Bắt buộc dùng role user thay vì function để tránh lỗi 400
+        parts: functionResponses
+      });
+
+      // Gửi lại lịch sử mới cho model
+      result = await model.generateContent({ contents });
       response = result.response;
     }
 
     return response.text();
   } catch (error) {
-    console.error("Lỗi Gemini AI Agent:", error);
+    console.error("Lỗi AI:", error);
     return `Dạ não AI của em đang bị kẹt xíu do lỗi: ${error.message}`;
   }
 };
