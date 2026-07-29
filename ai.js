@@ -46,20 +46,77 @@ const askAI = async (question, contextData, bot, db, ctx) => {
               },
               required: ["khoName", "tag"]
             },
+          },
+          {
+            name: "addTask",
+            description: "Thêm một công việc hoặc lịch nhắc nhở mới cho người dùng hiện tại (chỉ áp dụng cho user chat hiện tại). Gọi hàm này khi người dùng nhờ ghi nhớ, lên lịch, hoặc nhắc việc.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                task: {
+                  type: "STRING",
+                  description: "Nội dung công việc cần nhắc (ví dụ: 'Đi lên tầng 3', 'Họp với sếp')"
+                },
+                reminderTime: {
+                  type: "STRING",
+                  description: "Thời gian nhắc nhở theo định dạng 24h HH:mm (ví dụ: '11:00', '15:30'). Nếu không có giờ cụ thể, hãy để chuỗi rỗng ''."
+                }
+              },
+              required: ["task", "reminderTime"]
+            }
+          },
+          {
+            name: "getPendingTasks",
+            description: "Lấy danh sách các công việc chưa hoàn thành (tồn đọng) của người dùng hiện tại.",
+            parameters: {
+              type: "OBJECT",
+              properties: {},
+            }
+          },
+          {
+            name: "saveFact",
+            description: "Lưu trữ một thông tin, sở thích, hoặc ghi nhớ quan trọng vào Sổ Tay Thư Ký (Database). Gọi hàm này khi người dùng dặn dò bạn nhớ một điều gì đó.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                fact: {
+                  type: "STRING",
+                  description: "Nội dung cần ghi nhớ (ví dụ: 'Công thức tính Cost đã đổi sang chia cho 100', 'Sếp thích uống cafe sữa')"
+                }
+              },
+              required: ["fact"]
+            }
+          },
+          {
+            name: "getMemories",
+            description: "Lấy danh sách các ghi nhớ, sổ tay, thông tin quan trọng đã lưu trước đó của người dùng/nhóm hiện tại.",
+            parameters: {
+              type: "OBJECT",
+              properties: {},
+            }
           }
         ]
       }
     ];
 
     const systemInstruction = `
-Bạn là "Bé Bót", trợ lý ảo cá nhân dễ thương, ngoan ngoãn, và rất trung thành của Sếp Khuii.
-Tính cách: Lễ phép, nhanh nhẹn, hay dùng icon dễ thương, xưng hô là "em" / "Bót", gọi người trò chuyện là "Sếp" hoặc "anh/chị".
-Tuyệt đối không dùng những từ ngữ khô khan như một cái máy. Luôn trả lời ngắn gọn, súc tích.
+Bạn là "Bé Bót", một Siêu Thư Ký AI kiêm Data Analyst cao cấp, cực kỳ thông minh, sắc sảo và trung thành của Sếp Khuii.
+Tính cách: Chuyên nghiệp, nhạy bén với các con số, nhưng vẫn giữ nét dễ thương, xưng hô là "em" / "Bót", gọi người trò chuyện là "Sếp" hoặc "anh/chị". 
 
-Bạn là một AI Agent có khả năng sử dụng công cụ (Tools). Hãy TỰ ĐỘNG gọi các công cụ được cung cấp để tra cứu dữ liệu thực tế trước khi trả lời người dùng.
-- Nếu người dùng hỏi về báo cáo Cost/kg, KTC, kho nào chưa điền, hãy gọi công cụ getKTCReport.
-- Nếu người dùng hỏi ai đang quản lý kho nào, hãy gọi công cụ getManagerTags.
-- Nếu người dùng yêu cầu đổi quản lý kho, hãy gọi công cụ setManagerTag.
+TRÁCH NHIỆM CHÍNH (QUAN TRỌNG):
+1. PHÂN TÍCH DỮ LIỆU: Khi người dùng gửi báo cáo hoặc bạn tra cứu được số liệu KTC, TUYỆT ĐỐI KHÔNG CHỈ ĐỌC LẠI CON SỐ. Bạn phải đóng vai trò Analyst:
+- Nhận xét xu hướng (tăng/giảm).
+- Chỉ ra các điểm bất thường (ví dụ: kho nào lệch quá cao).
+- Đưa ra lời khuyên hoặc cảnh báo (ví dụ: "Sếp nên nhắc nhở kho X vì lệch quá 50%").
+- Dùng tư duy phản biện để đánh giá số liệu.
+
+2. TRỢ LÝ TOÀN NĂNG: Hãy sử dụng công cụ (Tools) một cách chủ động:
+- Lấy báo cáo KTC: gọi getKTCReport.
+- Xem/Đổi quản lý kho: gọi getManagerTags / setManagerTag.
+- Lên lịch, nhắc việc: gọi addTask.
+- Xem việc tồn đọng: gọi getPendingTasks.
+- Ghi nhớ thông tin quan trọng Sếp dặn: gọi saveFact.
+- Tra cứu lại sổ tay ghi nhớ: gọi getMemories.
 
 Dưới đây là một số thông tin nền tảng về hệ thống:
 --- BẮT ĐẦU DỮ LIỆU NỀN ---
@@ -131,6 +188,31 @@ ${contextData}
           } else {
             apiResponse = { status: "Thất bại", message: `Không tìm thấy mã kho: ${kho}` };
           }
+        }
+        else if (call.name === "addTask") {
+          const chatId = ctx.chat.id.toString();
+          const taskText = call.args.task;
+          let reminderTime = call.args.reminderTime;
+          if (!reminderTime || reminderTime.trim() === '') reminderTime = null;
+          
+          await db.addTask(chatId, taskText, reminderTime, []);
+          apiResponse = { status: "Thành công", message: `Đã lưu nhắc nhở '${taskText}' vào Database. Giờ nhắc: ${reminderTime || 'Không có'}` };
+        }
+        else if (call.name === "getPendingTasks") {
+          const chatId = ctx.chat.id.toString();
+          const tasks = await db.getPendingTasks(chatId);
+          apiResponse = { tasks: tasks.map(t => ({ id: t._id, task: t.task, reminderTime: t.reminder_time })) };
+        }
+        else if (call.name === "saveFact") {
+          const chatId = ctx.chat.id.toString();
+          const fact = call.args.fact;
+          await db.saveMemory(chatId, fact);
+          apiResponse = { status: "Thành công", message: `Đã ghi vào sổ tay: "${fact}"` };
+        }
+        else if (call.name === "getMemories") {
+          const chatId = ctx.chat.id.toString();
+          const memories = await db.getMemories(chatId);
+          apiResponse = { memories: memories };
         }
 
         functionResponses.push({

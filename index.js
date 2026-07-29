@@ -826,11 +826,25 @@ bot.command('setmanager', async (ctx) => {
   ]);
 
   // --- TRÍ TUỆ NHÂN TẠO (AI) ---
+  const globalChatHistory = {};
+
   bot.on('text', async (ctx) => {
     const text = ctx.message.text;
-    
+    const chatId = ctx.chat.id.toString();
+    const userName = ctx.from.first_name || 'User';
+
     // Bỏ qua nếu là câu lệnh
     if (text.startsWith('/')) return;
+
+    if (!globalChatHistory[chatId]) {
+      globalChatHistory[chatId] = [];
+    }
+    
+    // Lưu tin nhắn vào lịch sử (tối đa 15 tin nhắn)
+    globalChatHistory[chatId].push(`[${userName}]: ${text}`);
+    if (globalChatHistory[chatId].length > 15) {
+      globalChatHistory[chatId].shift();
+    }
 
     const isPrivate = ctx.chat.type === 'private';
     const isReplyToBot = ctx.message.reply_to_message && ctx.message.reply_to_message.from.id === ctx.botInfo.id;
@@ -883,6 +897,13 @@ bot.command('setmanager', async (ctx) => {
             contextData += `--- BÁO CÁO KTC ---\n${ktcReportText}\n`;
           }
         }
+
+        // 3. Inject Conversation History
+        if (globalChatHistory[chatId] && globalChatHistory[chatId].length > 0) {
+          contextData += `\n--- MẠCH CÂU CHUYỆN GẦN ĐÂY NHẤT (Ngữ cảnh) ---\n`;
+          contextData += globalChatHistory[chatId].join('\n');
+          contextData += `\n---------------------------------------------\n`;
+        }
       } catch (e) {
         console.error('Lỗi lấy context cho AI:', e);
       }
@@ -890,6 +911,11 @@ bot.command('setmanager', async (ctx) => {
       // Chạy AI ngầm (không dùng await) để tránh lỗi Timeout 90s của Telegraf
       ai.askAI(cleanQuestion, contextData, bot, db, ctx)
         .then(answer => {
+          // Lưu câu trả lời của Bót vào lịch sử
+          globalChatHistory[chatId].push(`[Bé Bót]: ${answer}`);
+          if (globalChatHistory[chatId].length > 15) {
+            globalChatHistory[chatId].shift();
+          }
           ctx.reply(answer, { reply_to_message_id: ctx.message.message_id }).catch(console.error);
         })
         .catch(err => {

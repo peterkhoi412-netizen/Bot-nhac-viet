@@ -40,6 +40,13 @@ const settingSchema = new mongoose.Schema({
 });
 const Setting = mongoose.model('Setting', settingSchema);
 
+const memorySchema = new mongoose.Schema({
+  chat_id: String,
+  fact: String,
+  created_at: { type: Date, default: Date.now }
+});
+const Memory = mongoose.model('Memory', memorySchema);
+
 // --- FUNCTIONS ---
 
 const saveUser = async (chatId) => {
@@ -160,6 +167,25 @@ const setSetting = async (key, value) => {
   }
 };
 
+const saveMemory = async (chatId, fact) => {
+  try {
+    const newMemory = new Memory({ chat_id: chatId, fact: fact });
+    await newMemory.save();
+  } catch (err) {
+    console.error('Lỗi saveMemory:', err);
+  }
+};
+
+const getMemories = async (chatId) => {
+  try {
+    const memories = await Memory.find({ chat_id: chatId }).sort({ created_at: -1 }).limit(30);
+    return memories.map(m => m.fact).reverse();
+  } catch (err) {
+    console.error('Lỗi getMemories:', err);
+    return [];
+  }
+};
+
 module.exports = {
   connectDB,
   saveUser,
@@ -176,5 +202,7 @@ module.exports = {
   setGroupTags,
   getGroupTags,
   getSetting,
-  setSetting
+  setSetting,
+  saveMemory,
+  getMemories
 };
