@@ -217,10 +217,17 @@ ${contextData}
           apiResponse = { memories: memories };
         }
 
+        let safeResponse = apiResponse;
+        if (typeof safeResponse === 'string') {
+          safeResponse = { result: safeResponse };
+        } else if (!safeResponse) {
+          safeResponse = { error: "Không có dữ liệu trả về" };
+        }
+
         functionResponses.push({
           functionResponse: {
             name: call.name,
-            response: apiResponse || { error: "Không có dữ liệu trả về" }
+            response: safeResponse
           }
         });
       }
