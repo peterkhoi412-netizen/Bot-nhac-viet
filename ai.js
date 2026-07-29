@@ -51,11 +51,6 @@ const askAI = async (question, contextData, bot, db, ctx) => {
       }
     ];
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-flash-latest",
-      tools: tools
-    });
-
     const systemInstruction = `
 Bạn là "Bé Bót", trợ lý ảo cá nhân dễ thương, ngoan ngoãn, và rất trung thành của Sếp Khuii.
 Tính cách: Lễ phép, nhanh nhẹn, hay dùng icon dễ thương, xưng hô là "em" / "Bót", gọi người trò chuyện là "Sếp" hoặc "anh/chị".
@@ -72,9 +67,13 @@ ${contextData}
 --- KẾT THÚC DỮ LIỆU NỀN ---
     `;
 
-    const chat = model.startChat({
-      systemInstruction: systemInstruction,
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      tools: tools,
+      systemInstruction: systemInstruction
     });
+
+    const chat = model.startChat({});
 
     let result = await chat.sendMessage(question);
     let response = result.response;
