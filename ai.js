@@ -225,11 +225,8 @@ ${contextData}
         });
       }
 
-      // Lưu functionCall của model vào history
-      contents.push({
-        role: "model",
-        parts: calls.map(c => ({ functionCall: { name: c.name, args: c.args } }))
-      });
+      // Lưu nguyên bản phản hồi của model vào history (để giữ lại thought_signature và text của model)
+      contents.push(response.candidates[0].content);
 
       // Lưu functionResponse của user vào history
       contents.push({
