@@ -888,7 +888,7 @@ bot.command('setmanager', async (ctx) => {
       }
 
       // Chạy AI ngầm (không dùng await) để tránh lỗi Timeout 90s của Telegraf
-      ai.askAI(cleanQuestion, contextData)
+      ai.askAI(cleanQuestion, contextData, bot, db, ctx)
         .then(answer => {
           ctx.reply(answer, { reply_to_message_id: ctx.message.message_id }).catch(console.error);
         })
