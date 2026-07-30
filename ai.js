@@ -15,10 +15,15 @@ const askAI = async (question, contextData, bot, db, ctx) => {
         functionDeclarations: [
           {
             name: "getKTCReport",
-            description: "Lấy báo cáo Cost/Weight KTC của ngày hôm qua, bao gồm các kho chưa điền, lệch bất thường (>50%), và lịch sử lỗi (>80%). Gọi hàm này khi người dùng hỏi về tình hình báo cáo, kho nào chưa điền, kho nào bị lệch.",
+            description: "Lấy báo cáo Cost/Weight KTC của một ngày cụ thể, bao gồm các kho chưa điền, lệch bất thường (>50%), và lịch sử lỗi (>80%). Nếu người dùng hỏi ngày nào đó (ví dụ 28/07), hãy truyền ngày đó vào tham số date (YYYY-MM-DD). Nếu không nói ngày nào, hãy để trống để lấy ngày hôm qua.",
             parameters: {
               type: "OBJECT",
-              properties: {},
+              properties: {
+                date: {
+                  type: "STRING",
+                  description: "Ngày cần tra cứu dữ liệu dưới định dạng YYYY-MM-DD."
+                }
+              },
             },
           },
           {
@@ -137,8 +142,15 @@ ${contextData}
     let result = await model.generateContent({ contents });
     let response = result.response;
     
+    let loopCount = 0;
     // Vòng lặp xử lý Function Calling
     while (true) {
+      loopCount++;
+      if (loopCount > 3) {
+        console.warn("[AI Agent] Bị kẹt vòng lặp Function Call, ép buộc thoát.");
+        return "Dạ em tìm mỏi mắt mà không ra dữ liệu chính xác theo yêu cầu, hình như em bị kẹt rồi. Sếp đổi cách hỏi giúp em nha! 😵‍💫";
+      }
+
       let calls;
       if (typeof response.functionCalls === 'function') {
         calls = response.functionCalls();
@@ -155,8 +167,8 @@ ${contextData}
         console.log(`[AI Agent] Đang gọi hàm: ${call.name}`, call.args);
 
         if (call.name === "getKTCReport") {
-          // Gọi hàm checkKTCData có sẵn với isForAI = true
-          apiResponse = await checkKTCData(bot, db, null, true);
+          let reqDate = call.args.date || null;
+          apiResponse = await checkKTCData(bot, db, null, true, reqDate);
         } 
         else if (call.name === "getManagerTags") {
           const defaultTags = {

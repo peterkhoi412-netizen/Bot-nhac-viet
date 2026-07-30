@@ -5,7 +5,7 @@ const utc = require('dayjs/plugin/utc');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
+const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateStr = null) => {
   try {
     const defaultTags = {
       'DT': '@DatPham_2033074',
@@ -52,13 +52,21 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
     const rows = response.data.values;
     if (!rows || rows.length === 0) return;
 
-    // Tìm cột của ngày hôm qua (N-1) vì báo cáo KTC chốt số liệu của ngày hôm trước
-    const yesterday = dayjs().tz('Asia/Ho_Chi_Minh').subtract(1, 'day');
+    // Tìm cột của ngày tra cứu (mặc định là hôm qua)
+    let targetDay = dayjs().tz('Asia/Ho_Chi_Minh').subtract(1, 'day');
+    if (requestedDateStr) {
+      // Ví dụ requestedDateStr = "2026-07-28"
+      const parsed = dayjs(requestedDateStr).tz('Asia/Ho_Chi_Minh');
+      if (parsed.isValid()) {
+        targetDay = parsed;
+      }
+    }
+
     // Sheets có thể format ngày là M/D/YYYY hoặc M/DD/YYYY
-    const targetDateStr1 = yesterday.format('M/D/YYYY');
-    const targetDateStr2 = yesterday.format('M/DD/YYYY');
-    const targetDateStr3 = yesterday.format('MM/DD/YYYY');
-    const targetDateStr4 = yesterday.format('MM/D/YYYY');
+    const targetDateStr1 = targetDay.format('M/D/YYYY');
+    const targetDateStr2 = targetDay.format('M/DD/YYYY');
+    const targetDateStr3 = targetDay.format('MM/DD/YYYY');
+    const targetDateStr4 = targetDay.format('MM/D/YYYY');
     
     // Ngày thường ở dòng 2 (index 1)
     const dateRow = rows[1]; 
@@ -72,7 +80,10 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false) => {
     }
 
     if (todayColIndex === -1) {
-      console.log(`Không tìm thấy cột ngày hôm qua (${targetDateStr1}) trong Sheet`);
+      console.log(`Không tìm thấy cột ngày (${targetDateStr1}) trong Sheet`);
+      if (isForAI) {
+        return { error: `Không tìm thấy dữ liệu của ngày ${targetDateStr1} trong hệ thống báo cáo KTC. Sếp kiểm tra lại ngày nha.` };
+      }
       return;
     }
 
