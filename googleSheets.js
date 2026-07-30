@@ -67,14 +67,20 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     const targetDateStr2 = targetDay.format('M/DD/YYYY');
     const targetDateStr3 = targetDay.format('MM/DD/YYYY');
     const targetDateStr4 = targetDay.format('MM/D/YYYY');
+    const targetDateStr5 = targetDay.format('D/M/YYYY');
+    const targetDateStr6 = targetDay.format('DD/M/YYYY');
+    const targetDateStr7 = targetDay.format('DD/MM/YYYY');
+    const targetDateStr8 = targetDay.format('D/MM/YYYY');
     
     // Ngày thường ở dòng 2 (index 1)
     const dateRow = rows[1]; 
     let todayColIndex = -1;
+    let foundDateStr = "";
     for (let i = 0; i < dateRow.length; i++) {
       const val = (dateRow[i] || '').trim();
-      if (val === targetDateStr1 || val === targetDateStr2 || val === targetDateStr3 || val === targetDateStr4) {
+      if ([targetDateStr1, targetDateStr2, targetDateStr3, targetDateStr4, targetDateStr5, targetDateStr6, targetDateStr7, targetDateStr8].includes(val)) {
         todayColIndex = i;
+        foundDateStr = val;
         break;
       }
     }
@@ -86,6 +92,9 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       }
       return;
     }
+
+    const prevDateStr = todayColIndex > 0 ? (dateRow[todayColIndex - 1] || '').trim() : '';
+
 
     let missingHubs = [];
     let anomalyHubs = [];
@@ -135,7 +144,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             allHubsData.push({
               name: khoName,
               tag: ktcTags[khoName],
-              cost_yesterday: currentNum,
+              cost_target: currentNum,
               cost_prev: prevNum,
               diff_percent: Math.round(diffPercent)
             });
@@ -205,7 +214,9 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
 
     if (isForAI) {
       return {
-        report_date: targetDateStr1,
+        target_date: targetDateStr1,
+        actual_date_in_sheet: foundDateStr || targetDateStr1,
+        prev_date_in_sheet: prevDateStr,
         all_hubs_data: allHubsData,
         missing_hubs: missingHubs,
         anomaly_hubs: anomalyHubs,

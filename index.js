@@ -916,7 +916,17 @@ bot.command('setmanager', async (ctx) => {
           if (globalChatHistory[chatId].length > 15) {
             globalChatHistory[chatId].shift();
           }
-          ctx.reply(answer, { reply_to_message_id: ctx.message.message_id }).catch(console.error);
+          
+          let formattedAnswer = answer
+            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+            .replace(/^###\s+(.*)$/gm, '<b>$1</b>')
+            .replace(/^##\s+(.*)$/gm, '<b>$1</b>');
+
+          ctx.reply(formattedAnswer, { reply_to_message_id: ctx.message.message_id, parse_mode: 'HTML' })
+            .catch(err => {
+              console.error('Lỗi gửi định dạng HTML, gửi lại raw text:', err);
+              ctx.reply(answer, { reply_to_message_id: ctx.message.message_id }).catch(console.error);
+            });
         })
         .catch(err => {
           console.error('Lỗi Gemini AI:', err);
