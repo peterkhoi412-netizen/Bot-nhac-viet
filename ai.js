@@ -1,7 +1,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { checkKTCData } = require('./googleSheets');
 
-const askAI = async (question, contextData, bot, db, ctx) => {
+const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mimeType = null) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return "Em chưa được nạp não AI (Sếp quên gắn GEMINI_API_KEY rồi ạ) nên em chưa biết suy nghĩ đâu Sếp ơi!";
@@ -145,6 +145,15 @@ ${contextData}
     let contents = [
       { role: "user", parts: [{ text: question }] }
     ];
+
+    if (imageBuffer && mimeType) {
+      contents[0].parts.push({
+        inlineData: {
+          data: imageBuffer.toString("base64"),
+          mimeType: mimeType
+        }
+      });
+    }
 
     let result = await model.generateContent({ contents });
     let response = result.response;

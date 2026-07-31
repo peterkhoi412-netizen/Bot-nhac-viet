@@ -828,8 +828,10 @@ bot.command('setmanager', async (ctx) => {
   // --- TRÍ TUỆ NHÂN TẠO (AI) ---
   const globalChatHistory = {};
 
-  bot.on('text', async (ctx) => {
-    const text = ctx.message.text;
+  bot.on('message', async (ctx) => {
+    if (!ctx.message.text && !ctx.message.photo) return; // Chỉ xử lý chữ hoặc ảnh
+
+    let text = ctx.message.text || ctx.message.caption || '';
     const chatId = ctx.chat.id.toString();
     const userName = ctx.from.first_name || 'User';
 
@@ -840,14 +842,36 @@ bot.command('setmanager', async (ctx) => {
       globalChatHistory[chatId] = [];
     }
     
+    // Tải ảnh xuống nếu có
+    let imageBuffer = null;
+    let mimeType = null;
+    if (ctx.message.photo && ctx.message.photo.length > 0) {
+      try {
+        const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Độ phân giải cao nhất
+        const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+        const https = require('https');
+        imageBuffer = await new Promise((resolve, reject) => {
+          https.get(fileLink.href, (res) => {
+            const data = [];
+            res.on('data', (chunk) => data.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(data)));
+          }).on('error', reject);
+        });
+        mimeType = 'image/jpeg';
+        if (!text) text = "Hãy phân tích hình ảnh này chi tiết.";
+      } catch (err) {
+        console.error("Lỗi tải ảnh từ Telegram:", err);
+      }
+    }
+
     // Lưu tin nhắn vào lịch sử (tối đa 15 tin nhắn)
-    globalChatHistory[chatId].push(`[${userName}]: ${text}`);
+    globalChatHistory[chatId].push(`[${userName}]: ${text} ${imageBuffer ? '(Kèm hình ảnh)' : ''}`);
     if (globalChatHistory[chatId].length > 15) {
       globalChatHistory[chatId].shift();
     }
 
     const isPrivate = ctx.chat.type === 'private';
-    const isReplyToBot = ctx.message.reply_to_message && ctx.message.reply_to_message.from.id === ctx.botInfo.id;
+    const isReplyToBot = ctx.message.reply_to_message && ctx.message.reply_to_message.from && ctx.message.reply_to_message.from.id === ctx.botInfo.id;
     const botUsername = ctx.botInfo.username.toLowerCase();
     const isMentioningBot = text.toLowerCase().includes(`@${botUsername}`);
 
@@ -855,7 +879,7 @@ bot.command('setmanager', async (ctx) => {
     if (isPrivate || isReplyToBot || isMentioningBot) {
       // Dùng regex để replace không phân biệt hoa thường
       const cleanQuestion = text.replace(new RegExp(`@${botUsername}`, 'gi'), '').trim();
-      if (cleanQuestion === '') return; // Chỉ tag tên mà ko nói gì
+      if (cleanQuestion === '' && !imageBuffer) return; // Chỉ tag tên mà ko nói gì và ko có ảnh
 
       ctx.sendChatAction('typing');
 
@@ -909,7 +933,7 @@ bot.command('setmanager', async (ctx) => {
       }
 
       // Chạy AI ngầm (không dùng await) để tránh lỗi Timeout 90s của Telegraf
-      ai.askAI(cleanQuestion, contextData, bot, db, ctx)
+      ai.askAI(cleanQuestion, contextData, bot, db, ctx, imageBuffer, mimeType)
         .then(answer => {
           // Lưu câu trả lời của Bót vào lịch sử
           globalChatHistory[chatId].push(`[Bé Bót]: ${answer}`);
