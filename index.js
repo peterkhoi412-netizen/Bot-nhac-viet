@@ -941,7 +941,14 @@ bot.command('setmanager', async (ctx) => {
             globalChatHistory[chatId].shift();
           }
           
+          // Escape HTML entities to prevent Telegram from crashing on < and >
           let formattedAnswer = answer
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+          // Convert Markdown to HTML tags
+          formattedAnswer = formattedAnswer
             .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
             .replace(/^###\s+(.*)$/gm, '<b>$1</b>')
             .replace(/^##\s+(.*)$/gm, '<b>$1</b>');
