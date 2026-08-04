@@ -71,12 +71,14 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     const targetDateStr6 = targetDay.format('DD/M/YYYY');
     const targetDateStr7 = targetDay.format('DD/MM/YYYY');
     const targetDateStr8 = targetDay.format('D/MM/YYYY');
+    const displayTargetDate = targetDay.format('DD/MM/YYYY');
     
     // Ngày thường ở dòng 2 (index 1)
     const dateRow = rows[1]; 
     let todayColIndex = -1;
     let foundDateStr = "";
-    for (let i = 0; i < dateRow.length; i++) {
+    // Search from right to left to avoid matching older dates (e.g. March 8 vs August 3)
+    for (let i = dateRow.length - 1; i >= 0; i--) {
       const val = (dateRow[i] || '').trim();
       if ([targetDateStr1, targetDateStr2, targetDateStr3, targetDateStr4, targetDateStr5, targetDateStr6, targetDateStr7, targetDateStr8].includes(val)) {
         todayColIndex = i;
@@ -86,9 +88,9 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     }
 
     if (todayColIndex === -1) {
-      console.log(`Không tìm thấy cột ngày (${targetDateStr1}) trong Sheet`);
+      console.log(`Không tìm thấy cột ngày (${displayTargetDate}) trong Sheet`);
       if (isForAI) {
-        return { error: `Không tìm thấy dữ liệu của ngày ${targetDateStr1} trong hệ thống báo cáo KTC. Sếp kiểm tra lại ngày nha.` };
+        return { error: `Không tìm thấy dữ liệu của ngày ${displayTargetDate} trong hệ thống báo cáo KTC. Sếp kiểm tra lại ngày nha.` };
       }
       return;
     }
@@ -214,7 +216,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
 
     if (isForAI) {
       return {
-        target_date: targetDateStr1,
+        target_date: displayTargetDate,
         actual_date_in_sheet: foundDateStr || targetDateStr1,
         prev_date_in_sheet: prevDateStr,
         all_hubs_data: allHubsData,
@@ -230,7 +232,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       
       const targetGroup = await db.getGroupById(targetAliasId);
       if (targetGroup) {
-        let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các vấn đề sau về số liệu Cost/kg ngày hôm qua (${targetDateStr1}):\n`;
+        let msg = `🚨 COST/WEIGHT KTC 🚨\n\nHiện tại Bót phát hiện các vấn đề sau về số liệu Cost/kg ngày hôm qua (${displayTargetDate}):\n`;
         
         if (missingHubs.length > 0) {
           msg += `\n❌ CHƯA ĐIỀN\n`;
@@ -275,7 +277,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         if (ctx) ctx.reply('❌ Lỗi: Không tìm thấy Nhóm báo cáo KTC. Sếp kiểm tra lại Mã nhóm trong cấu hình nhé!');
       }
     } else {
-      if (ctx) ctx.reply(`✅ Đã check xong! Quá đỉnh, tất cả các kho đều đã có số liệu Cost/kg của ngày hôm qua (${targetDateStr1})!`);
+      if (ctx) ctx.reply(`✅ Đã check xong! Quá đỉnh, tất cả các kho đều đã có số liệu Cost/kg của ngày hôm qua (${displayTargetDate})!`);
     }
 
   } catch (error) {
