@@ -146,8 +146,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             allHubsData.push({
               name: khoName,
               tag: ktcTags[khoName],
-              cost_target: currentNum,
-              cost_prev: prevNum,
+              cost_hom_nay: currentNum,
+              cost_hom_qua: prevNum,
               diff_percent: Math.round(diffPercent)
             });
 
