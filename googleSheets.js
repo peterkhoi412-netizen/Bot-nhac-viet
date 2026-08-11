@@ -165,7 +165,6 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             }
           }
         }
-        }
 
         // --- GOM DỮ LIỆU THÔ 30 NGÀY CHO AI ---
         if (!history30Days[khoName]) {
