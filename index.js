@@ -1008,7 +1008,10 @@ http.createServer((req, res) => {
   res.end('Bot is running 24/7');
 }).listen(process.env.PORT || 3000);
 
-startBot();
+console.log("⏳ Đợi 10 giây trước khi khởi động Bot để tránh xung đột với phiên bản cũ...");
+setTimeout(() => {
+  startBot();
+}, 10000);
 
 // Bắt lỗi để bot không bị crash (tùy chọn)
 process.once('SIGINT', () => bot.stop('SIGINT'));
