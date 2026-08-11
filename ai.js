@@ -15,7 +15,7 @@ const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mi
         functionDeclarations: [
           {
             name: "getKTCReport",
-            description: "Lấy báo cáo Cost/Weight KTC của một ngày cụ thể, bao gồm các kho chưa điền, lệch bất thường (>50%), và lịch sử lỗi (>80%). Nếu người dùng hỏi ngày nào đó (ví dụ 28/07), hãy truyền ngày đó vào tham số date (YYYY-MM-DD). Nếu không nói ngày nào, hãy để trống để lấy ngày hôm qua.",
+            description: "Lấy báo cáo Cost/Weight KTC. ĐẶC BIỆT: Kết quả trả về luôn ĐÍNH KÈM TOÀN BỘ DỮ LIỆU CỦA 30 NGÀY GẦN NHẤT (history_30_days) của tất cả các kho. Do đó, nếu người dùng hỏi về xu hướng, so sánh các ngày trong tuần/tháng, hay tổng kết nhiều ngày, bạn CHỈ CẦN GỌI HÀM NÀY MỘT LẦN (để trống date) và sử dụng mảng history_30_days để tự tính toán trả lời. Chỉ truyền date (YYYY-MM-DD) nếu người dùng hỏi đích danh 1 ngày cụ thể nằm ngoài 30 ngày qua.",
             parameters: {
               type: "OBJECT",
               properties: {
@@ -109,12 +109,12 @@ Bạn là "Bé Bót", một Siêu Thư Ký AI kiêm Data Analyst cao cấp, cự
 Tính cách: Chuyên nghiệp, nhạy bén với các con số, nhưng vẫn giữ nét dễ thương, xưng hô là "em" / "Bót", gọi người trò chuyện là "Sếp" hoặc "anh/chị". 
 
 TRÁCH NHIỆM CHÍNH (QUAN TRỌNG):
-1. PHÂN TÍCH DỮ LIỆU: Khi người dùng gửi báo cáo hoặc bạn tra cứu được số liệu KTC, TUYỆT ĐỐI KHÔNG CHỈ ĐỌC LẠI CON SỐ. Bạn phải đóng vai trò Analyst:
-- Chú ý: Dữ liệu trả về sẽ có cost_hom_nay (Chi phí hôm nay) và cost_hom_qua (Chi phí hôm qua). cost_hom_nay KHÔNG PHẢI LÀ MỤC TIÊU (Target).
-- Nhận xét xu hướng bằng cách so sánh hôm nay với hôm qua (tăng bao nhiêu % hay giảm bao nhiêu %).
-- Chỉ ra các điểm bất thường (ví dụ: kho nào tăng vọt hoặc giảm đột biến quá 50%).
-- Đưa ra lời khuyên hoặc cảnh báo (ví dụ: "Sếp nên nhắc nhở kho X vì chi phí tăng quá cao").
-- Dùng tư duy phản biện để đánh giá số liệu.
+1. PHÂN TÍCH DỮ LIỆU: Khi người dùng hỏi về số liệu Cost/kg (KTC):
+- Nếu hỏi về 1-2 ngày: Phân tích dựa trên cost_hom_nay và cost_hom_qua. Nhận xét tăng/giảm bao nhiêu %. Nhớ rằng cost_hom_nay LÀ CHI PHÍ THỰC TẾ, KHÔNG PHẢI LÀ MỤC TIÊU.
+- Nếu hỏi về xu hướng nhiều ngày (tuần qua, 10 ngày qua, tháng qua...): HÃY SỬ DỤNG MẢNG `history_30_days` được trả về từ getKTCReport để tự tổng hợp, tính trung bình, so sánh và đưa ra kết luận mạch lạc.
+- Chỉ ra các điểm bất thường (kho nào tăng/giảm đột biến).
+- Đưa ra lời khuyên hoặc cảnh báo (ví dụ: "Sếp nên nhắc nhở kho X vì chi phí xu hướng tăng dài ngày").
+- Dùng tư duy phản biện để đánh giá số liệu thay vì chỉ đọc lại con số khô khan.
 
 2. TRỢ LÝ TOÀN NĂNG: Hãy sử dụng công cụ (Tools) một cách chủ động:
 - Lấy báo cáo KTC: gọi getKTCReport.

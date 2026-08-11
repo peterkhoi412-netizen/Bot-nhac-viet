@@ -101,6 +101,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     let missingHubs = [];
     let anomalyHubs = [];
     let historicalAnomalyHubs = {};
+    let history30Days = {}; // Lưu trữ toàn bộ dữ liệu thô của 30 ngày qua
     let processedHubs = new Set();
     let allHubsData = []; // Mảng chứa toàn bộ dữ liệu thô của tất cả các kho
 
@@ -164,8 +165,25 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             }
           }
         }
+        }
 
-        // Quét lịch sử 30 ngày (từ N-2 lùi về N-31)
+        // --- GOM DỮ LIỆU THÔ 30 NGÀY CHO AI ---
+        if (!history30Days[khoName]) {
+          history30Days[khoName] = [];
+        }
+        for (let col = todayColIndex; col >= Math.max(1, todayColIndex - 30); col--) {
+          const valStr = (row[col] || '').toString().trim();
+          let dateStr = (rows[1][col] || '').toString().trim();
+          if (dateStr && valStr !== '') {
+             const cleanVal = valStr.replace(/[^0-9.-]+/g, "");
+             const valNum = parseFloat(cleanVal);
+             if (!isNaN(valNum)) {
+                history30Days[khoName].push({ date: dateStr, cost: valNum });
+             }
+          }
+        }
+
+        // Quét lịch sử 30 ngày (từ N-2 lùi về N-31) để tìm lỗi >80%
         const startCol = Math.max(1, todayColIndex - 30);
         for (let col = todayColIndex - 1; col >= startCol; col--) {
           const histCellVal = (row[col] || '').toString().trim();
@@ -227,7 +245,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         all_hubs_data: allHubsData,
         missing_hubs: missingHubs,
         anomaly_hubs: anomalyHubs,
-        historical_anomalies: historicalAnomalyHubs
+        historical_anomalies: historicalAnomalyHubs,
+        history_30_days: history30Days
       };
     }
 
