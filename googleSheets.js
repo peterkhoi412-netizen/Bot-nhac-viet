@@ -136,10 +136,13 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
 
           if (!isNaN(currentNum) && !isNaN(prevNum)) {
             let diffPercent = 0;
-            if (prevNum === 0) {
-              if (currentNum !== 0) diffPercent = 100; // Đi từ 0 lên số khác -> tính là lệch 100%
+            if (prevNum === 0 && currentNum === 0) {
+              diffPercent = 0;
+            } else if (prevNum === 0 || currentNum === 0) {
+              diffPercent = 100;
             } else {
-              diffPercent = Math.abs((currentNum - prevNum) / prevNum) * 100;
+              // Sếp muốn tính độ lệch theo tỷ lệ Số lớn / Số bé
+              diffPercent = (Math.max(currentNum, prevNum) / Math.min(currentNum, prevNum) - 1) * 100;
             }
             
             // Lưu dữ liệu thô vào mảng allHubsData
@@ -176,10 +179,12 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
 
             if (!isNaN(histCurrNum) && !isNaN(histPrevNum)) {
               let diffPercent = 0;
-              if (histPrevNum === 0) {
-                if (histCurrNum !== 0) diffPercent = 100;
+              if (histPrevNum === 0 && histCurrNum === 0) {
+                diffPercent = 0;
+              } else if (histPrevNum === 0 || histCurrNum === 0) {
+                diffPercent = 100;
               } else {
-                diffPercent = Math.abs((histCurrNum - histPrevNum) / histPrevNum) * 100;
+                diffPercent = (Math.max(histCurrNum, histPrevNum) / Math.min(histCurrNum, histPrevNum) - 1) * 100;
               }
 
               if (diffPercent > 80) {
