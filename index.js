@@ -687,9 +687,14 @@ cron.schedule('* * * * *', async () => {
       for (const chatId in tasksByChat) {
         let msg = `🔔 <b>Reng reng (${currentHHMM})</b>\n`;
         let hasAllTag = false;
+        let isCostKgTask = false;
+        
         tasksByChat[chatId].forEach(t => {
           if (t.task.toLowerCase().includes('@all')) {
             hasAllTag = true;
+          }
+          if (t.task.toLowerCase().includes('cost/kg') || t.task.toLowerCase().includes('cost / kg')) {
+            isCostKgTask = true;
           }
           msg += `${t.task}\n`;
         });
@@ -704,6 +709,31 @@ cron.schedule('* * * * *', async () => {
           }
         } else {
           msg += `\nĐừng quên gõ <code>/done &lt;số&gt;</code> khi làm xong nhen!`;
+        }
+
+        // --- Tích hợp soi nhanh KTC tự động khi có task nhắc Cost/kg ---
+        if (isCostKgTask) {
+          try {
+            const ktcData = await checkKTCData(bot, db, null, true);
+            if (ktcData && !ktcData.error) {
+              msg += `\n---\n<b>Bé Bót soi nhanh số liệu cho Sếp nè:</b>\n`;
+              if (ktcData.missing_hubs.length === 0 && ktcData.anomaly_hubs.length === 0) {
+                msg += `\n✅ <b>TẤT CẢ CÁC KHO ĐÃ ĐIỀN ĐỦ & SỐ LIỆU ỔN ĐỊNH RỒI Ạ!</b> 🎉\nChị Trang có thể tự tin gửi báo cáo Cost/kg được luôn rồi nhé!\n`;
+              } else {
+                if (ktcData.missing_hubs.length > 0) {
+                  msg += `\n❌ <b>Các kho CHƯA điền số liệu (${ktcData.missing_hubs.length} kho):</b>\n`;
+                  ktcData.missing_hubs.forEach(h => msg += `- ${h.name} (Quản lý: ${h.tag})\n`);
+                }
+                if (ktcData.anomaly_hubs.length > 0) {
+                  msg += `\n⚠️ <b>Các kho CÓ BIẾN ĐỘNG MẠNH (>50%):</b>\n`;
+                  ktcData.anomaly_hubs.forEach(h => msg += `- ${h.name} (Quản lý: ${h.tag}) - Hôm trước: ${h.prev} ➔ Hôm nay: ${h.current}\n`);
+                }
+                msg += `\n👉 Chị Trang khoan hãy gửi báo cáo vội, phiền chị nhắc các kho trên check lại số liệu một xíu cho chắc chắn nhé ạ!`;
+              }
+            }
+          } catch (e) {
+            console.error('Lỗi soi nhanh KTC:', e);
+          }
         }
         
         bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(console.error);
