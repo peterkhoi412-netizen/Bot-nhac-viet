@@ -1001,11 +1001,35 @@ bot.command('setmanager', async (ctx) => {
   });
 };
 
-// --- MÁY CHỦ ẢO CHO RENDER ---
+// --- MÁY CHỦ CHO RENDER (CÓ WEBHOOK NHẬN DỮ LIỆU KTC) ---
 const http = require('http');
 http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('Bot is running 24/7');
+  if (req.method === 'POST' && req.url === '/updateKTC') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        if (payload.token === 'Minkhuii_Secure_Token_123') {
+          // Lưu dữ liệu vào MongoDB dưới dạng setting 'cached_ktc_values'
+          await db.setSetting('cached_ktc_values', payload.values);
+          console.log('✅ Đã nhận và cập nhật dữ liệu KTC vào MongoDB Cache thành công!');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Updated successfully' }));
+        } else {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+        }
+      } catch (err) {
+        console.error('Lỗi khi cập nhật KTC Webhook:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+  } else {
+    res.writeHead(200);
+    res.end('Bot is running 24/7');
+  }
 }).listen(process.env.PORT || 3000);
 
 console.log("⏳ Đợi 10 giây trước khi khởi động Bot để tránh xung đột với phiên bản cũ...");

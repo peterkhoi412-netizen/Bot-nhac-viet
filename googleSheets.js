@@ -22,34 +22,59 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       ktcTags = { ...defaultTags, ...ktcTags };
     }
 
-    const fs = require('fs');
-    let authOptions = {
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    };
+    let rows = [];
 
-    if (fs.existsSync('./google-credentials.json')) {
-      authOptions.keyFile = './google-credentials.json';
-    } else if (process.env.GOOGLE_CREDENTIALS_BASE64) {
-      const creds = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
-      if (creds.private_key) {
-        creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+    // Ưu tiên đọc dữ liệu KTC được cache trong MongoDB (do Sheet tự push sang)
+    try {
+      const cachedData = await db.getSetting('cached_ktc_values');
+      if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+        rows = cachedData;
+        console.log('📖 Đã đọc dữ liệu KTC thành công từ MongoDB Cache!');
       }
-      authOptions.credentials = creds;
+    } catch (cacheErr) {
+      console.warn('Cảnh báo: Không thể đọc cache KTC từ DB, thử dùng Web App / Service Account...', cacheErr.message);
     }
 
-    const auth = new google.auth.GoogleAuth(authOptions);
+    // Nếu không có cache, thử đọc bằng Web App (GOOGLE_SCRIPT_URL) hoặc Service Account (Dự phòng)
+    if (rows.length === 0) {
+      if (process.env.GOOGLE_SCRIPT_URL) {
+        console.log('Fetching sheet data via Google Apps Script Web App...');
+        const scriptUrl = `${process.env.GOOGLE_SCRIPT_URL.trim()}?token=Minkhuii_Secure_Token_123`;
+        const res = await fetch(scriptUrl);
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        rows = data.values;
+      } else {
+        const fs = require('fs');
+        let authOptions = {
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        };
 
-    const sheets = google.sheets({ version: 'v4', auth });
-    const sheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
-    const sheetName = (process.env.GOOGLE_SHEET_NAME || '').trim();
+        if (fs.existsSync('./google-credentials.json')) {
+          authOptions.keyFile = './google-credentials.json';
+        } else if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+          const creds = JSON.parse(Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8'));
+          if (creds.private_key) {
+            creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+          }
+          authOptions.credentials = creds;
+        }
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `${sheetName}!A1:ZZ50`,
-      valueRenderOption: 'FORMATTED_VALUE',
-    });
+        const auth = new google.auth.GoogleAuth(authOptions);
+        const sheets = google.sheets({ version: 'v4', auth });
+        const sheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
+        const sheetName = (process.env.GOOGLE_SHEET_NAME || '').trim();
 
-    const rows = response.data.values;
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `${sheetName}!A1:ZZ50`,
+          valueRenderOption: 'FORMATTED_VALUE',
+        });
+        rows = response.data.values;
+      }
+    }
+
     if (!rows || rows.length === 0) return;
 
     // Tìm cột của ngày tra cứu (mặc định là hôm qua)
