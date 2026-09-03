@@ -123,6 +123,18 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     const prevDateStr = todayColIndex > 0 ? (dateRow[todayColIndex - 1] || '').trim() : '';
 
 
+    const checkIsHoliday = (dateString) => {
+      if (!dateString) return false;
+      const parts = dateString.toString().trim().split('/');
+      if (parts.length >= 2) {
+        const p1 = parseInt(parts[0], 10);
+        const p2 = parseInt(parts[1], 10);
+        return (p1 === 9 && (p2 === 1 || p2 === 2)) || (p2 === 9 && (p1 === 1 || p1 === 2));
+      }
+      return false;
+    };
+    const isTargetDateHoliday = checkIsHoliday(displayTargetDate);
+
     let missingHubs = [];
     let anomalyHubs = [];
     let historicalAnomalyHubs = {};
@@ -180,7 +192,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
               diff_percent: Math.round(diffPercent)
             });
 
-            if (diffPercent >= 50) {
+            if (diffPercent >= 50 && !isTargetDateHoliday) {
               anomalyHubs.push({
                 name: khoName,
                 tag: ktcTags[khoName],
@@ -229,7 +241,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
                 diffPercent = (Math.max(histCurrNum, histPrevNum) / Math.min(histCurrNum, histPrevNum) - 1) * 100;
               }
 
-              if (diffPercent > 80) {
+              const colDateStr = (rows[1][col] || '').toString().trim();
+              if (diffPercent > 80 && !checkIsHoliday(colDateStr)) {
                 if (!historicalAnomalyHubs[khoName]) {
                   historicalAnomalyHubs[khoName] = {
                     tag: ktcTags[khoName],
