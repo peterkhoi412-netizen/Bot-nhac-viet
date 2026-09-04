@@ -279,6 +279,9 @@ ${contextData}
     if (error.message && (error.message.includes('429') || error.message.includes('quota') || error.message.includes('Too Many Requests'))) {
       return `⏳ Dạ Google bắt em nghỉ mệt 1 phút Sếp ơi (do mình xài gói API miễn phí nên bị giới hạn số câu hỏi mỗi phút ạ). Sếp đợi em uống miếng nước tầm 1 phút sau Sếp nhắn lại là em làm được liền nha! 💦`;
     }
+    if (error.message && error.message.includes('503 Service Unavailable')) {
+      return `☁️ Dạ máy chủ AI của Google đang bảo trì hoặc quá tải tạm thời Sếp ạ (Lỗi 503). Sếp đợi 1 tí xíu rồi nhắn lại giúp em nha, Google nghẽn mạng tí thôi ạ! 🥲`;
+    }
     return `Dạ não AI của em đang bị kẹt xíu do lỗi: ${error.message}`;
   }
 };
