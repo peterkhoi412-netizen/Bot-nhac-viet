@@ -133,7 +133,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       }
       return false;
     };
-    const isTargetDateHoliday = checkIsHoliday(displayTargetDate);
+    const isTargetDateHoliday = checkIsHoliday(displayTargetDate) || checkIsHoliday(prevDateStr);
 
     let missingHubs = [];
     let anomalyHubs = [];
@@ -242,7 +242,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
               }
 
               const colDateStr = (rows[1][col] || '').toString().trim();
-              if (diffPercent > 80 && !checkIsHoliday(colDateStr)) {
+              const prevColDateStr = (rows[1][col - 1] || '').toString().trim();
+              if (diffPercent > 80 && !checkIsHoliday(colDateStr) && !checkIsHoliday(prevColDateStr)) {
                 if (!historicalAnomalyHubs[khoName]) {
                   historicalAnomalyHubs[khoName] = {
                     tag: ktcTags[khoName],
