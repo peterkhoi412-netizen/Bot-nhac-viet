@@ -139,6 +139,7 @@ ${contextData}
     // Gọi AI an toàn: Thử với Tools trước, nếu Google quá tải/lỗi thì fallback sang Chat thường (chắn chắn 100% trả lời được)
     const callAIWithSafety = async () => {
       const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+      let lastError = null;
 
       // 1. Thử có Tools (Cho các câu hỏi cần gọi hàm KTC/Lịch/Task)
       for (const m of modelsToTry) {
@@ -149,6 +150,7 @@ ${contextData}
             const res = await model.generateContent({ contents });
             return res;
           } catch (e) {
+            lastError = e;
             console.warn(`[AI Agent] Model ${m} WITH TOOLS thất bại (Lần ${attempt}): ${e.message}`);
             if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
           }
@@ -163,10 +165,12 @@ ${contextData}
           const res = await model.generateContent({ contents });
           return res;
         } catch (e) {
+          lastError = e;
           console.warn(`[AI Agent] Model ${m} CHAT THƯỜNG thất bại: ${e.message}`);
         }
       }
 
+      if (lastError) throw lastError;
       throw new Error("Máy chủ Google Gemini AI hiện đang quá tải, Sếp thử lại sau 1 phút nha!");
     };
 
@@ -284,9 +288,9 @@ ${contextData}
         parts: functionResponses
       });
 
-      // Gửi lại lịch sử mới cho model với retry & fallback
-      let resObj = await generateWithRetryAndFallback(contents);
-      result = resObj.result;
+      // Gửi lại lịch sử mới cho model
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", tools: tools, systemInstruction: systemInstruction });
+      result = await model.generateContent({ contents });
       response = result.response;
     }
 
