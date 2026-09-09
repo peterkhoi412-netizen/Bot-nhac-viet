@@ -28,11 +28,7 @@ const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mi
           },
           {
             name: "getManagerTags",
-            description: "Lấy danh sách các thẻ Tag Telegram của Quản lý các kho hiện tại.",
-            parameters: {
-              type: "OBJECT",
-              properties: {},
-            },
+            description: "Lấy danh sách các thẻ Tag Telegram của Quản lý các kho hiện tại."
           },
           {
             name: "setManagerTag",
@@ -72,11 +68,7 @@ const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mi
           },
           {
             name: "getPendingTasks",
-            description: "Lấy danh sách các công việc chưa hoàn thành (tồn đọng) của người dùng hiện tại.",
-            parameters: {
-              type: "OBJECT",
-              properties: {},
-            }
+            description: "Lấy danh sách các công việc chưa hoàn thành (tồn đọng) của người dùng hiện tại."
           },
           {
             name: "saveFact",
@@ -94,11 +86,7 @@ const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mi
           },
           {
             name: "getMemories",
-            description: "Lấy danh sách các ghi nhớ, sổ tay, thông tin quan trọng đã lưu trước đó của người dùng/nhóm hiện tại.",
-            parameters: {
-              type: "OBJECT",
-              properties: {},
-            }
+            description: "Lấy danh sách các ghi nhớ, sổ tay, thông tin quan trọng đã lưu trước đó của người dùng/nhóm hiện tại."
           }
         ]
       }
@@ -135,7 +123,7 @@ ${contextData}
 --- KẾT THÚC DỮ LIỆU NỀN ---
     `;
 
-    const MODELS = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+    const MODELS = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro-latest"];
 
     const generateWithRetryAndFallback = async (contentsPayload) => {
       let lastError = null;
