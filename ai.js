@@ -136,42 +136,32 @@ ${contextData}
       });
     }
 
-    // Gọi AI an toàn: Thử với Tools trước, nếu Google quá tải/lỗi thì fallback sang Chat thường (chắn chắn 100% trả lời được)
+    // Gọi AI an toàn: Thử với Tools trước, nếu thất bại thì fallback sang Chat thường (No Tools)
     const callAIWithSafety = async () => {
-      const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
-      let lastError = null;
+      let errWithTools = null;
 
-      // 1. Thử có Tools (Cho các câu hỏi cần gọi hàm KTC/Lịch/Task)
-      for (const m of modelsToTry) {
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            console.log(`[AI Agent] Gọi model ${m} (WITH TOOLS - Lần ${attempt})...`);
-            const model = genAI.getGenerativeModel({ model: m, tools: tools, systemInstruction: systemInstruction });
-            const res = await model.generateContent({ contents });
-            return res;
-          } catch (e) {
-            lastError = e;
-            console.warn(`[AI Agent] Model ${m} WITH TOOLS thất bại (Lần ${attempt}): ${e.message}`);
-            if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
-          }
-        }
+      // 1. Thử gemini-1.5-flash CHẾ ĐỘ FULL TOOLS (Cho báo cáo KTC/Lịch/Task)
+      try {
+        console.log(`[AI Agent] Gọi gemini-1.5-flash (WITH TOOLS)...`);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", tools: tools, systemInstruction: systemInstruction });
+        const res = await model.generateContent({ contents });
+        return res;
+      } catch (e1) {
+        errWithTools = e1;
+        console.warn(`[AI Agent] gemini-1.5-flash WITH TOOLS thất bại: ${e1.message}`);
       }
 
-      // 2. Fallback sang Chat Thường (Không dùng Tools - Dùng cho trò chuyện bình thường "Ê Bót", "Hi"...)
-      console.warn(`[AI Agent Fallback] Chuyển sang chế độ CHAT THƯỜNG (không dùng Tools)...`);
-      for (const m of modelsToTry) {
-        try {
-          const model = genAI.getGenerativeModel({ model: m, systemInstruction: systemInstruction });
-          const res = await model.generateContent({ contents });
-          return res;
-        } catch (e) {
-          lastError = e;
-          console.warn(`[AI Agent] Model ${m} CHAT THƯỜNG thất bại: ${e.message}`);
-        }
+      // 2. Thử gemini-1.5-flash CHẾ ĐỘ CHAT THƯỜNG (Không dùng Tools)
+      try {
+        console.log(`[AI Agent Fallback] Gọi gemini-1.5-flash (CHAT THƯỜNG - No Tools)...`);
+        const modelNoTools = genAI.getGenerativeModel({ model: "gemini-1.5-flash", systemInstruction: systemInstruction });
+        const res = await modelNoTools.generateContent({ contents });
+        return res;
+      } catch (e2) {
+        console.error(`[AI Agent] gemini-1.5-flash CHAT THƯỜNG thất bại: ${e2.message}`);
+        // Quăng chính xác lỗi từ lượt gọi có Tools lên Telegram để soi nguyên nhân
+        throw errWithTools || e2;
       }
-
-      if (lastError) throw lastError;
-      throw new Error("Máy chủ Google Gemini AI hiện đang quá tải, Sếp thử lại sau 1 phút nha!");
     };
 
     let result = await callAIWithSafety();
