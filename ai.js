@@ -135,11 +135,34 @@ ${contextData}
 --- KẾT THÚC DỮ LIỆU NỀN ---
     `;
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-flash-latest",
-      tools: tools,
-      systemInstruction: systemInstruction
-    });
+    const MODELS = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+
+    const generateWithRetryAndFallback = async (contentsPayload) => {
+      let lastError = null;
+      for (const modelName of MODELS) {
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          tools: tools,
+          systemInstruction: systemInstruction
+        });
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`[AI Agent] Gọi model ${modelName} (Thử lần ${attempt})...`);
+            const res = await model.generateContent({ contents: contentsPayload });
+            return { result: res, modelUsed: modelName };
+          } catch (err) {
+            lastError = err;
+            console.warn(`[AI Agent Retry] Model ${modelName} thử lần ${attempt} thất bại: ${err.message}`);
+            if (attempt < 3) {
+              await new Promise(r => setTimeout(r, attempt * 1000));
+            }
+          }
+        }
+        console.warn(`[AI Agent Fallback] Model ${modelName} thất bại cả 3 lần, tự động chuyển model tiếp theo...`);
+      }
+      throw lastError;
+    };
 
     let contents = [
       { role: "user", parts: [{ text: question }] }
@@ -154,7 +177,7 @@ ${contextData}
       });
     }
 
-    let result = await model.generateContent({ contents });
+    let { result, modelUsed } = await generateWithRetryAndFallback(contents);
     let response = result.response;
     
     let loopCount = 0;
@@ -268,8 +291,9 @@ ${contextData}
         parts: functionResponses
       });
 
-      // Gửi lại lịch sử mới cho model
-      result = await model.generateContent({ contents });
+      // Gửi lại lịch sử mới cho model với retry & fallback
+      let resObj = await generateWithRetryAndFallback(contents);
+      result = resObj.result;
       response = result.response;
     }
 
