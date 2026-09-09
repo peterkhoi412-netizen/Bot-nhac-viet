@@ -965,10 +965,12 @@ bot.command('setmanager', async (ctx) => {
       // Chạy AI ngầm (không dùng await) để tránh lỗi Timeout 90s của Telegraf
       ai.askAI(cleanQuestion, contextData, bot, db, ctx, imageBuffer, mimeType)
         .then(answer => {
-          // Lưu câu trả lời của Bót vào lịch sử
-          globalChatHistory[chatId].push(`[Bé Bót]: ${answer}`);
-          if (globalChatHistory[chatId].length > 15) {
-            globalChatHistory[chatId].shift();
+          // Lưu câu trả lời của Bót vào lịch sử (chỉ lưu nếu không phải thông báo lỗi)
+          if (!answer.includes('Dạ não AI của em đang bị kẹt xíu do lỗi')) {
+            globalChatHistory[chatId].push(`[Bé Bót]: ${answer}`);
+            if (globalChatHistory[chatId].length > 15) {
+              globalChatHistory[chatId].shift();
+            }
           }
           
           // Escape HTML entities to prevent Telegram from crashing on < and >
