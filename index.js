@@ -767,7 +767,9 @@ bot.command('config', async (ctx) => {
     'DX': '@DatPham_2033074',
     'HY': '@thuychu_14',
     'XA': '@PhatDao_HRBP',
-    'M12': '@ThuHa_HRBP'
+    'M12': '@ThuHa_HRBP',
+    'Cụm KCT MB': '@DatPham_2033074',
+    'Sóng Thần': '@ThuHa_HRBP'
   };
 
   msg += `<b>1. MÔ-ĐUN: BÁO CÁO COST/WEIGHT KTC</b>\n`;

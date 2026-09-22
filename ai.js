@@ -201,7 +201,9 @@ ${contextData}
             'DX': '@DatPham_2033074',
             'HY': '@thuychu_14',
             'XA': '@PhatDao_HRBP',
-            'M12': '@ThuHa_HRBP'
+            'M12': '@ThuHa_HRBP',
+            'Cụm KCT MB': '@DatPham_2033074',
+            'Sóng Thần': '@ThuHa_HRBP'
           };
           let ktcTags = await db.getSetting('ktc_tags');
           if (!ktcTags || typeof ktcTags !== 'object') ktcTags = {};
@@ -213,7 +215,9 @@ ${contextData}
             'DX': '@DatPham_2033074',
             'HY': '@thuychu_14',
             'XA': '@PhatDao_HRBP',
-            'M12': '@ThuHa_HRBP'
+            'M12': '@ThuHa_HRBP',
+            'Cụm KCT MB': '@DatPham_2033074',
+            'Sóng Thần': '@ThuHa_HRBP'
           };
           let ktcTags = await db.getSetting('ktc_tags');
           if (!ktcTags || typeof ktcTags !== 'object') ktcTags = { ...defaultTags };

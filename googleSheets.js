@@ -12,7 +12,9 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       'DX': '@DatPham_2033074',
       'HY': '@thuychu_14',
       'XA': '@PhatDao_HRBP',
-      'M12': '@ThuHa_HRBP'
+      'M12': '@ThuHa_HRBP',
+      'Cụm KCT MB': '@DatPham_2033074',
+      'Sóng Thần': '@ThuHa_HRBP'
     };
 
     let ktcTags = await db.getSetting('ktc_tags');
@@ -80,7 +82,6 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     // Tìm cột của ngày tra cứu (mặc định là hôm qua)
     let targetDay = dayjs().tz('Asia/Ho_Chi_Minh').subtract(1, 'day');
     if (requestedDateStr) {
-      // Ví dụ requestedDateStr = "2026-07-28"
       const parsed = dayjs(requestedDateStr).tz('Asia/Ho_Chi_Minh');
       if (parsed.isValid()) {
         targetDay = parsed;
@@ -102,7 +103,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     const dateRow = rows[1]; 
     let todayColIndex = -1;
     let foundDateStr = "";
-    // Search from right to left to avoid matching older dates (e.g. March 8 vs August 3)
+    // Search from right to left to avoid matching older dates
     for (let i = dateRow.length - 1; i >= 0; i--) {
       const val = (dateRow[i] || '').trim();
       if ([targetDateStr1, targetDateStr2, targetDateStr3, targetDateStr4, targetDateStr5, targetDateStr6, targetDateStr7, targetDateStr8].includes(val)) {
@@ -122,6 +123,39 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
 
     const prevDateStr = todayColIndex > 0 ? (dateRow[todayColIndex - 1] || '').trim() : '';
 
+    const formatShortDate = (rawStr) => {
+      if (!rawStr) return '';
+      const parts = rawStr.toString().trim().split('/');
+      if (parts.length >= 2) {
+        let p1 = parseInt(parts[0], 10);
+        let p2 = parseInt(parts[1], 10);
+        if (isNaN(p1) || isNaN(p2)) return rawStr;
+        if (p1 <= 12 && p2 > 12) {
+          return `${p2.toString().padStart(2, '0')}/${p1.toString().padStart(2, '0')}`;
+        }
+        if (p1 > 12 && p2 <= 12) {
+          return `${p1.toString().padStart(2, '0')}/${p2.toString().padStart(2, '0')}`;
+        }
+        return `${p1.toString().padStart(2, '0')}/${p2.toString().padStart(2, '0')}`;
+      }
+      return rawStr;
+    };
+
+    // Tìm cột ngày 01/09 của năm hiện tại trong dateRow
+    let sept1ColIndex = -1;
+    for (let col = 1; col <= todayColIndex; col++) {
+      const val = (dateRow[col] || '').trim();
+      const parts = val.split('/');
+      if (parts.length >= 2) {
+        const p1 = parseInt(parts[0], 10);
+        const p2 = parseInt(parts[1], 10);
+        if ((p1 === 9 && p2 === 1) || (p2 === 9 && p1 === 1)) {
+          sept1ColIndex = col;
+          break;
+        }
+      }
+    }
+    if (sept1ColIndex === -1) sept1ColIndex = Math.max(1, todayColIndex - 30);
 
     const checkIsHoliday = (dateString) => {
       if (!dateString) return false;
@@ -134,6 +168,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       return false;
     };
     const isTargetDateHoliday = checkIsHoliday(displayTargetDate) || checkIsHoliday(prevDateStr);
+
+    const noAnomalyHubs = ['Cụm KCT MB', 'Sóng Thần'];
 
     let missingHubs = [];
     let anomalyHubs = [];
@@ -149,56 +185,121 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       
       if (ktcTags.hasOwnProperty(khoName) && !processedHubs.has(khoName)) {
         processedHubs.add(khoName);
-
-        // Lấy giá trị ô Cost/kg ở cột của ngày hôm qua (N-1) và ngày hôm trước nữa (N-2)
-        const cellValue = (row[todayColIndex] || '').toString().trim();
-        const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
-        
-        // Lấy giá trị ô "So với mục tiêu" (nằm ngay dòng bên dưới dòng Cost/kg)
-        const nextRow = rows[i + 1] || [];
-        const nextCellValue = (nextRow[todayColIndex] || '').toString().trim();
-
+        const isNoAnomalyHub = noAnomalyHubs.includes(khoName);
         const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
-        
-        if (cellValue === '' || nextCellValue === '' || errorValues.includes(cellValue) || errorValues.includes(nextCellValue)) {
-          missingHubs.push({
-            name: khoName,
-            tag: ktcTags[khoName]
-          });
-        } else {
-          // Parse string to float aggressively
-          const cleanCurrent = cellValue.replace(/[^0-9.-]+/g, "");
-          const cleanPrev = prevValue.replace(/[^0-9.-]+/g, "");
-          const currentNum = parseFloat(cleanCurrent);
-          const prevNum = parseFloat(cleanPrev);
 
-          if (!isNaN(currentNum) && !isNaN(prevNum)) {
-            let diffPercent = 0;
-            if (prevNum === 0 && currentNum === 0) {
-              diffPercent = 0;
-            } else if (prevNum === 0 || currentNum === 0) {
-              diffPercent = 100;
-            } else {
-              // Sếp muốn tính độ lệch theo tỷ lệ Số lớn / Số bé
-              diffPercent = (Math.max(currentNum, prevNum) / Math.min(currentNum, prevNum) - 1) * 100;
+        if (isNoAnomalyHub) {
+          // Đối với Cụm KCT MB & Sóng Thần: Quét từ ngày 01/09 đến todayColIndex để tìm các ngày thiếu
+          let missingDates = [];
+          for (let col = sept1ColIndex; col <= todayColIndex; col++) {
+            const valStr = (row[col] || '').toString().trim();
+            const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
+            const colDateRaw = (dateRow[col] || '').toString().trim();
+
+            if (valStr === '' || nextValStr === '' || errorValues.includes(valStr) || errorValues.includes(nextValStr)) {
+              if (colDateRaw) {
+                missingDates.push(formatShortDate(colDateRaw));
+              }
             }
-            
-            // Lưu dữ liệu thô vào mảng allHubsData
-            allHubsData.push({
+          }
+
+          if (missingDates.length > 0) {
+            missingHubs.push({
               name: khoName,
               tag: ktcTags[khoName],
-              cost_hom_nay: currentNum,
-              cost_hom_qua: prevNum,
-              diff_percent: Math.round(diffPercent)
+              missingDates: missingDates
             });
+          }
+        } else {
+          // Đối với 5 kho cũ (DT, DX, HY, XA, M12):
+          const cellValue = (row[todayColIndex] || '').toString().trim();
+          const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
+          
+          const nextRow = rows[i + 1] || [];
+          const nextCellValue = (nextRow[todayColIndex] || '').toString().trim();
 
-            if (diffPercent >= 50 && !isTargetDateHoliday) {
-              anomalyHubs.push({
+          if (cellValue === '' || nextCellValue === '' || errorValues.includes(cellValue) || errorValues.includes(nextCellValue)) {
+            missingHubs.push({
+              name: khoName,
+              tag: ktcTags[khoName]
+            });
+          } else {
+            const cleanCurrent = cellValue.replace(/[^0-9.-]+/g, "");
+            const cleanPrev = prevValue.replace(/[^0-9.-]+/g, "");
+            const currentNum = parseFloat(cleanCurrent);
+            const prevNum = parseFloat(cleanPrev);
+
+            if (!isNaN(currentNum) && !isNaN(prevNum)) {
+              let diffPercent = 0;
+              if (prevNum === 0 && currentNum === 0) {
+                diffPercent = 0;
+              } else if (prevNum === 0 || currentNum === 0) {
+                diffPercent = 100;
+              } else {
+                diffPercent = (Math.max(currentNum, prevNum) / Math.min(currentNum, prevNum) - 1) * 100;
+              }
+              
+              allHubsData.push({
                 name: khoName,
                 tag: ktcTags[khoName],
-                current: cellValue,
-                prev: prevValue
+                cost_hom_nay: currentNum,
+                cost_hom_qua: prevNum,
+                diff_percent: Math.round(diffPercent)
               });
+
+              if (diffPercent >= 50 && !isTargetDateHoliday) {
+                anomalyHubs.push({
+                  name: khoName,
+                  tag: ktcTags[khoName],
+                  current: cellValue,
+                  prev: prevValue,
+                  currentDate: formatShortDate(displayTargetDate),
+                  prevDate: formatShortDate(prevDateStr)
+                });
+              }
+            }
+          }
+
+          // Quét lịch sử 30 ngày cho kho cũ
+          const startCol = Math.max(1, todayColIndex - 30);
+          for (let col = todayColIndex - 1; col >= startCol; col--) {
+            const histCellVal = (row[col] || '').toString().trim();
+            const histPrevVal = (row[col - 1] || '').toString().trim();
+            
+            if (histCellVal !== '' && histPrevVal !== '') {
+              const cleanHistCurr = histCellVal.replace(/[^0-9.-]+/g, "");
+              const cleanHistPrev = histPrevVal.replace(/[^0-9.-]+/g, "");
+              const histCurrNum = parseFloat(cleanHistCurr);
+              const histPrevNum = parseFloat(cleanHistPrev);
+
+              if (!isNaN(histCurrNum) && !isNaN(histPrevNum)) {
+                let diffPercent = 0;
+                if (histPrevNum === 0 && histCurrNum === 0) {
+                  diffPercent = 0;
+                } else if (histPrevNum === 0 || histCurrNum === 0) {
+                  diffPercent = 100;
+                } else {
+                  diffPercent = (Math.max(histCurrNum, histPrevNum) / Math.min(histCurrNum, histPrevNum) - 1) * 100;
+                }
+
+                const colDateStr = (rows[1][col] || '').toString().trim();
+                const prevColDateStr = (rows[1][col - 1] || '').toString().trim();
+                if (diffPercent > 80 && !checkIsHoliday(colDateStr) && !checkIsHoliday(prevColDateStr)) {
+                  if (!historicalAnomalyHubs[khoName]) {
+                    historicalAnomalyHubs[khoName] = {
+                      tag: ktcTags[khoName],
+                      anomalies: []
+                    };
+                  }
+                  
+                  historicalAnomalyHubs[khoName].anomalies.push({
+                    date: formatShortDate(colDateStr),
+                    prevDate: formatShortDate(prevColDateStr),
+                    current: histCellVal,
+                    prev: histPrevVal
+                  });
+                }
+              }
             }
           }
         }
@@ -219,56 +320,6 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
           }
         }
 
-        // Quét lịch sử 30 ngày (từ N-2 lùi về N-31) để tìm lỗi >80%
-        const startCol = Math.max(1, todayColIndex - 30);
-        for (let col = todayColIndex - 1; col >= startCol; col--) {
-          const histCellVal = (row[col] || '').toString().trim();
-          const histPrevVal = (row[col - 1] || '').toString().trim();
-          
-          if (histCellVal !== '' && histPrevVal !== '') {
-            const cleanHistCurr = histCellVal.replace(/[^0-9.-]+/g, "");
-            const cleanHistPrev = histPrevVal.replace(/[^0-9.-]+/g, "");
-            const histCurrNum = parseFloat(cleanHistCurr);
-            const histPrevNum = parseFloat(cleanHistPrev);
-
-            if (!isNaN(histCurrNum) && !isNaN(histPrevNum)) {
-              let diffPercent = 0;
-              if (histPrevNum === 0 && histCurrNum === 0) {
-                diffPercent = 0;
-              } else if (histPrevNum === 0 || histCurrNum === 0) {
-                diffPercent = 100;
-              } else {
-                diffPercent = (Math.max(histCurrNum, histPrevNum) / Math.min(histCurrNum, histPrevNum) - 1) * 100;
-              }
-
-              const colDateStr = (rows[1][col] || '').toString().trim();
-              const prevColDateStr = (rows[1][col - 1] || '').toString().trim();
-              if (diffPercent > 80 && !checkIsHoliday(colDateStr) && !checkIsHoliday(prevColDateStr)) {
-                if (!historicalAnomalyHubs[khoName]) {
-                  historicalAnomalyHubs[khoName] = {
-                    tag: ktcTags[khoName],
-                    anomalies: []
-                  };
-                }
-                
-                // Format ngày (từ rows[1])
-                let dateStr = (rows[1][col] || '').toString().trim();
-                const dateParts = dateStr.split('/');
-                if (dateParts.length >= 2) {
-                  dateStr = `${dateParts[1].padStart(2, '0')}/${dateParts[0]}`; // MM/DD -> DD/MM
-                }
-                
-                historicalAnomalyHubs[khoName].anomalies.push({
-                  date: dateStr,
-                  current: histCellVal,
-                  prev: histPrevVal
-                });
-              }
-            }
-          }
-        }
-
-        // Nếu đã quét đủ 5 kho thì dừng luôn, không quét tiếp xuống các bảng bên dưới (ví dụ bảng Monthly)
         if (processedHubs.size === Object.keys(ktcTags).length) {
           break;
         }
@@ -299,14 +350,19 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         if (missingHubs.length > 0) {
           msg += `\n❌ CHƯA ĐIỀN\n`;
           missingHubs.forEach(hub => {
-            msg += `Kho ${hub.name}: ${hub.tag}\n`;
+            if (hub.missingDates && hub.missingDates.length > 0) {
+              const dateLabel = hub.missingDates.length === 1 ? 'ngày' : 'các ngày';
+              msg += `Kho ${hub.name}: ${hub.tag} (Chưa điền ${dateLabel}: ${hub.missingDates.join(', ')})\n`;
+            } else {
+              msg += `Kho ${hub.name}: ${hub.tag}\n`;
+            }
           });
         }
 
         if (anomalyHubs.length > 0) {
           msg += `\n⚠️ CHÊNH LỆCH BẤT THƯỜNG (>50% so với ngày N-2):\n`;
           anomalyHubs.forEach(hub => {
-            msg += `Kho ${hub.name}: ${hub.tag} (Hôm trước: ${hub.prev} ➔ Hôm qua: ${hub.current})\n`;
+            msg += `Kho ${hub.name}: ${hub.tag} (Ngày ${hub.prevDate}: ${hub.prev} ➔ Ngày ${hub.currentDate}: ${hub.current})\n`;
           });
         }
 
@@ -317,7 +373,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             msg += `Kho ${kho}: ${data.tag}\n`;
             const reversedAnomalies = [...data.anomalies].reverse();
             reversedAnomalies.forEach(a => {
-              msg += ` - Ngày ${a.date} (Hôm trước: ${a.prev} ➔ Hôm đó: ${a.current})\n`;
+              msg += ` - (Ngày ${a.prevDate}: ${a.prev} ➔ Ngày ${a.date}: ${a.current})\n`;
             });
           }
         }
