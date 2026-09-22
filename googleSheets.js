@@ -127,35 +127,13 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       if (!rawStr) return '';
       const parts = rawStr.toString().trim().split('/');
       if (parts.length >= 2) {
-        let p1 = parseInt(parts[0], 10);
-        let p2 = parseInt(parts[1], 10);
-        if (isNaN(p1) || isNaN(p2)) return rawStr;
-        if (p1 <= 12 && p2 > 12) {
-          return `${p2.toString().padStart(2, '0')}/${p1.toString().padStart(2, '0')}`;
-        }
-        if (p1 > 12 && p2 <= 12) {
-          return `${p1.toString().padStart(2, '0')}/${p2.toString().padStart(2, '0')}`;
-        }
-        return `${p1.toString().padStart(2, '0')}/${p2.toString().padStart(2, '0')}`;
+        // Sheet format M/D/YYYY (parts[0] là Tháng, parts[1] là Ngày)
+        const m = parts[0].padStart(2, '0');
+        const d = parts[1].padStart(2, '0');
+        return `${d}/${m}`;
       }
       return rawStr;
     };
-
-    // Tìm cột ngày 01/09 của năm hiện tại trong dateRow
-    let sept1ColIndex = -1;
-    for (let col = 1; col <= todayColIndex; col++) {
-      const val = (dateRow[col] || '').trim();
-      const parts = val.split('/');
-      if (parts.length >= 2) {
-        const p1 = parseInt(parts[0], 10);
-        const p2 = parseInt(parts[1], 10);
-        if ((p1 === 9 && p2 === 1) || (p2 === 9 && p1 === 1)) {
-          sept1ColIndex = col;
-          break;
-        }
-      }
-    }
-    if (sept1ColIndex === -1) sept1ColIndex = Math.max(1, todayColIndex - 30);
 
     const checkIsHoliday = (dateString) => {
       if (!dateString) return false;
@@ -189,16 +167,22 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
 
         if (isNoAnomalyHub) {
-          // Đối với Cụm KCT MB & Sóng Thần: Quét từ ngày 01/09 đến todayColIndex để tìm các ngày thiếu
+          // Đối với Cụm KCT MB & Sóng Thần: CHỈ quét các ngày TRONG THÁNG 9 (từ 01/09 đến todayColIndex)
           let missingDates = [];
-          for (let col = sept1ColIndex; col <= todayColIndex; col++) {
-            const valStr = (row[col] || '').toString().trim();
-            const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
+          for (let col = 1; col <= todayColIndex; col++) {
             const colDateRaw = (dateRow[col] || '').toString().trim();
+            const parts = colDateRaw.split('/');
+            if (parts.length >= 2) {
+              const m = parseInt(parts[0], 10); // Sheet format M/D/YYYY -> parts[0] là Tháng (9)
+              if (m === 9) {
+                const valStr = (row[col] || '').toString().trim();
+                const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
 
-            if (valStr === '' || nextValStr === '' || errorValues.includes(valStr) || errorValues.includes(nextValStr)) {
-              if (colDateRaw) {
-                missingDates.push(formatShortDate(colDateRaw));
+                if (valStr === '' || nextValStr === '' || errorValues.includes(valStr) || errorValues.includes(nextValStr)) {
+                  if (colDateRaw) {
+                    missingDates.push(formatShortDate(colDateRaw));
+                  }
+                }
               }
             }
           }
