@@ -167,22 +167,26 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
 
         if (isNoAnomalyHub) {
-          // Đối với Cụm KCT MB & Sóng Thần: CHỈ quét các ngày TRONG THÁNG 9 (từ 01/09 đến todayColIndex)
-          let missingDates = [];
+          // Đối với Cụm KCT MB & Sóng Thần: Quét liên tục từ 01/09/2026 đến ngày hôm qua (todayColIndex)
+          let sept1ColIndex = -1;
           for (let col = 1; col <= todayColIndex; col++) {
-            const colDateRaw = (dateRow[col] || '').toString().trim();
-            const parts = colDateRaw.split('/');
-            if (parts.length >= 2) {
-              const m = parseInt(parts[0], 10); // Sheet format M/D/YYYY -> parts[0] là Tháng (9)
-              if (m === 9) {
-                const valStr = (row[col] || '').toString().trim();
-                const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
+            const val = (dateRow[col] || '').trim();
+            if (val === '9/1/2026' || val === '09/01/2026' || val === '09/1/2026' || val === '9/01/2026') {
+              sept1ColIndex = col;
+              break;
+            }
+          }
+          if (sept1ColIndex === -1) sept1ColIndex = Math.max(1, todayColIndex - 60);
 
-                if (valStr === '' || nextValStr === '' || errorValues.includes(valStr) || errorValues.includes(nextValStr)) {
-                  if (colDateRaw) {
-                    missingDates.push(formatShortDate(colDateRaw));
-                  }
-                }
+          let missingDates = [];
+          for (let col = sept1ColIndex; col <= todayColIndex; col++) {
+            const colDateRaw = (dateRow[col] || '').toString().trim();
+            const valStr = (row[col] || '').toString().trim();
+            const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
+
+            if (valStr === '' || nextValStr === '' || errorValues.includes(valStr) || errorValues.includes(nextValStr)) {
+              if (colDateRaw) {
+                missingDates.push(formatShortDate(colDateRaw));
               }
             }
           }
