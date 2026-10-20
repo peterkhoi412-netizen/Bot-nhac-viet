@@ -156,12 +156,30 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     let processedHubs = new Set();
     let allHubsData = []; // Mảng chứa toàn bộ dữ liệu thô của tất cả các kho
 
+    // Helper chuẩn hóa nhận diện kho từ Cột A của Sheet TỔNG HỢP
+    const matchKhoKey = (rawName) => {
+      if (!rawName) return null;
+      const s = rawName.toString().trim();
+      if (ktcTags.hasOwnProperty(s)) return s;
+      
+      const lower = s.toLowerCase();
+      if (lower.startsWith('m12') || lower.includes('m12')) return 'M12';
+      if (lower === 'dt' || lower.startsWith('dt ') || lower.includes('đài tư') || lower.includes('dai tu')) return 'DT';
+      if (lower === 'dx' || lower.startsWith('dx ') || lower.includes('dương xá') || lower.includes('duong xa')) return 'DX';
+      if (lower === 'hy' || lower.startsWith('hy ') || lower.includes('hưng yên') || lower.includes('hung yen')) return 'HY';
+      if (lower === 'xa' || lower.startsWith('xa ') || lower.includes('xuyên á') || lower.includes('xuyen a')) return 'XA';
+      if (lower.includes('kct')) return 'Cụm KCT MB';
+      if (lower.includes('sóng thần') || lower.includes('song than') || lower === 'st') return 'Sóng Thần';
+      return null;
+    };
+
     // Tìm các kho từ cột A
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const khoName = (row[0] || '').trim();
+      const rawKhoName = (row[0] || '').trim();
+      const khoName = matchKhoKey(rawKhoName);
       
-      if (ktcTags.hasOwnProperty(khoName) && !processedHubs.has(khoName)) {
+      if (khoName && ktcTags.hasOwnProperty(khoName) && !processedHubs.has(khoName)) {
         processedHubs.add(khoName);
         const isNoAnomalyHub = noAnomalyHubs.includes(khoName);
         const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
