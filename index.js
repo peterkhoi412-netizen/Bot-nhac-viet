@@ -762,15 +762,29 @@ bot.command('config', async (ctx) => {
 
   // 1. KTC Report
   const ktcTarget = await db.getSetting('ktc_target_group_alias') || process.env.KTC_REPORT_GROUP_ALIAS;
-  const ktcTags = await db.getSetting('ktc_tags') || {
+  const defaultKtcTags = {
     'DT': '@DatPham_2033074',
     'DX': '@DatPham_2033074',
     'HY': '@thuychu_14',
     'XA': '@PhatDao_HRBP',
-    'M12': '@ThuHa_HRBP',
+    'HCM20': '@ThuHa_HRBP',
+    'Tân Kim': '@ThuHa_HRBP',
     'Cụm KCT MB': '@DatPham_2033074',
     'Sóng Thần': '@ThuHa_HRBP'
   };
+  let ktcTags = await db.getSetting('ktc_tags');
+  if (!ktcTags || typeof ktcTags !== 'object') {
+    ktcTags = { ...defaultKtcTags };
+  } else {
+    if (ktcTags['M12'] && !ktcTags['HCM20']) {
+      ktcTags['HCM20'] = ktcTags['M12'];
+      delete ktcTags['M12'];
+    }
+    if (!ktcTags['Tân Kim']) {
+      ktcTags['Tân Kim'] = '@ThuHa_HRBP';
+    }
+    ktcTags = { ...defaultKtcTags, ...ktcTags };
+  }
 
   msg += `<b>1. MÔ-ĐUN: BÁO CÁO COST/WEIGHT KTC</b>\n`;
   msg += `- Lịch chạy: 11h30 trưa mỗi ngày\n`;
@@ -810,11 +824,11 @@ bot.command('setreport', async (ctx) => {
 bot.command('setmanager', async (ctx) => {
   const parts = ctx.message.text.trim().split(/\s+/);
   if (parts.length < 4) {
-    return ctx.reply('Sai cú pháp! Vui lòng dùng: /setmanager <tên_mô_đun> <Mã_Kho> <@Tag>\nVí dụ: /setmanager cost/weightktc HY @nguoi_moi');
+    return ctx.reply('Sai cú pháp! Vui lòng dùng: /setmanager <tên_mô_đun> <Mã_Kho> <@Tag>\nVí dụ: /setmanager cost/weightktc HCM20 @nguoi_moi\nHoặc: /setmanager cost/weightktc Tân Kim @nguoi_moi');
   }
   const moduleName = parts[1].toLowerCase();
-  const khoName = parts[2].toUpperCase();
-  const tag = parts.slice(3).join(' ');
+  const tag = parts[parts.length - 1];
+  const rawKhoInput = parts.slice(2, parts.length - 1).join(' ').trim();
 
   if (moduleName === 'cost/weightktc') {
       const defaultTags = {
@@ -822,18 +836,45 @@ bot.command('setmanager', async (ctx) => {
         'DX': '@DatPham_2033074',
         'HY': '@thuychu_14',
         'XA': '@PhatDao_HRBP',
-        'M12': '@ThuHa_HRBP'
+        'HCM20': '@ThuHa_HRBP',
+        'Tân Kim': '@ThuHa_HRBP',
+        'Cụm KCT MB': '@DatPham_2033074',
+        'Sóng Thần': '@ThuHa_HRBP'
       };
       let ktcTags = await db.getSetting('ktc_tags');
       if (!ktcTags || typeof ktcTags !== 'object') {
         ktcTags = { ...defaultTags };
       } else {
+        if (ktcTags['M12'] && !ktcTags['HCM20']) {
+          ktcTags['HCM20'] = ktcTags['M12'];
+          delete ktcTags['M12'];
+        }
+        if (!ktcTags['Tân Kim']) {
+          ktcTags['Tân Kim'] = '@ThuHa_HRBP';
+        }
         ktcTags = { ...defaultTags, ...ktcTags };
       }
+
+    // Chuẩn hóa tên kho
+    let resolvedKho = rawKhoInput;
+    const lower = rawKhoInput.toLowerCase();
+    if (lower.startsWith('hcm20') || lower.includes('hcm 20') || lower.startsWith('m12') || lower.includes('m12')) resolvedKho = 'HCM20';
+    else if (lower.includes('tân kim') || lower.includes('tan kim') || lower === 'tk') resolvedKho = 'Tân Kim';
+    else if (lower === 'dt' || lower.startsWith('dt ') || lower.includes('đài tư') || lower.includes('dai tu')) resolvedKho = 'DT';
+    else if (lower === 'dx' || lower.startsWith('dx ') || lower.includes('dương xá') || lower.includes('duong xa')) resolvedKho = 'DX';
+    else if (lower === 'hy' || lower.startsWith('hy ') || lower.includes('hưng yên') || lower.includes('hung yen')) resolvedKho = 'HY';
+    else if (lower === 'xa' || lower.startsWith('xa ') || lower.includes('xuyên á') || lower.includes('xuyen a')) resolvedKho = 'XA';
+    else if (lower.includes('kct')) resolvedKho = 'Cụm KCT MB';
+    else if (lower.includes('sóng thần') || lower.includes('song than') || lower === 'st') resolvedKho = 'Sóng Thần';
+    else {
+      // Tìm key khớp không phân biệt hoa thường
+      const matchedKey = Object.keys(ktcTags).find(k => k.toLowerCase() === lower);
+      if (matchedKey) resolvedKho = matchedKey;
+    }
     
-    ktcTags[khoName] = tag;
+    ktcTags[resolvedKho] = tag;
     await db.setSetting('ktc_tags', ktcTags);
-    ctx.reply(`✅ Đã cập nhật Quản lý Kho ${khoName} thành ${tag} thành công!`);
+    ctx.reply(`✅ Đã cập nhật Quản lý Kho ${resolvedKho} thành ${tag} thành công!`);
   } else {
     ctx.reply(`❌ Hiện tại Bót chưa hỗ trợ mô-đun: ${moduleName}`);
   }

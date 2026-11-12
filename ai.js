@@ -38,7 +38,7 @@ const askAI = async (question, contextData, bot, db, ctx, imageBuffer = null, mi
               properties: {
                 khoName: {
                   type: "STRING",
-                  description: "Mã kho (ví dụ: DT, DX, HY, XA, M12)"
+                  description: "Mã kho (ví dụ: DT, DX, HY, XA, HCM20, Tân Kim, Cụm KCT MB, Sóng Thần)"
                 },
                 tag: {
                   type: "STRING",
@@ -201,12 +201,20 @@ ${contextData}
             'DX': '@DatPham_2033074',
             'HY': '@thuychu_14',
             'XA': '@PhatDao_HRBP',
-            'M12': '@ThuHa_HRBP',
+            'HCM20': '@ThuHa_HRBP',
+            'Tân Kim': '@ThuHa_HRBP',
             'Cụm KCT MB': '@DatPham_2033074',
             'Sóng Thần': '@ThuHa_HRBP'
           };
           let ktcTags = await db.getSetting('ktc_tags');
           if (!ktcTags || typeof ktcTags !== 'object') ktcTags = {};
+          if (ktcTags['M12'] && !ktcTags['HCM20']) {
+            ktcTags['HCM20'] = ktcTags['M12'];
+            delete ktcTags['M12'];
+          }
+          if (!ktcTags['Tân Kim']) {
+            ktcTags['Tân Kim'] = '@ThuHa_HRBP';
+          }
           apiResponse = { tags: { ...defaultTags, ...ktcTags } };
         }
         else if (call.name === "setManagerTag") {
@@ -215,21 +223,46 @@ ${contextData}
             'DX': '@DatPham_2033074',
             'HY': '@thuychu_14',
             'XA': '@PhatDao_HRBP',
-            'M12': '@ThuHa_HRBP',
+            'HCM20': '@ThuHa_HRBP',
+            'Tân Kim': '@ThuHa_HRBP',
             'Cụm KCT MB': '@DatPham_2033074',
             'Sóng Thần': '@ThuHa_HRBP'
           };
           let ktcTags = await db.getSetting('ktc_tags');
           if (!ktcTags || typeof ktcTags !== 'object') ktcTags = { ...defaultTags };
-          else ktcTags = { ...defaultTags, ...ktcTags };
+          else {
+            if (ktcTags['M12'] && !ktcTags['HCM20']) {
+              ktcTags['HCM20'] = ktcTags['M12'];
+              delete ktcTags['M12'];
+            }
+            if (!ktcTags['Tân Kim']) {
+              ktcTags['Tân Kim'] = '@ThuHa_HRBP';
+            }
+            ktcTags = { ...defaultTags, ...ktcTags };
+          }
           
-          const kho = (call.args.khoName || '').toUpperCase();
-          if (ktcTags.hasOwnProperty(kho)) {
-            ktcTags[kho] = call.args.tag;
+          let rawKho = (call.args.khoName || '').trim();
+          let resolvedKho = rawKho;
+          const lower = rawKho.toLowerCase();
+          if (lower.startsWith('hcm20') || lower.includes('hcm 20') || lower.startsWith('m12') || lower.includes('m12')) resolvedKho = 'HCM20';
+          else if (lower.includes('tân kim') || lower.includes('tan kim') || lower === 'tk') resolvedKho = 'Tân Kim';
+          else if (lower === 'dt' || lower.startsWith('dt ') || lower.includes('đài tư') || lower.includes('dai tu')) resolvedKho = 'DT';
+          else if (lower === 'dx' || lower.startsWith('dx ') || lower.includes('dương xá') || lower.includes('duong xa')) resolvedKho = 'DX';
+          else if (lower === 'hy' || lower.startsWith('hy ') || lower.includes('hưng yên') || lower.includes('hung yen')) resolvedKho = 'HY';
+          else if (lower === 'xa' || lower.startsWith('xa ') || lower.includes('xuyên á') || lower.includes('xuyen a')) resolvedKho = 'XA';
+          else if (lower.includes('kct')) resolvedKho = 'Cụm KCT MB';
+          else if (lower.includes('sóng thần') || lower.includes('song than') || lower === 'st') resolvedKho = 'Sóng Thần';
+          else {
+            const matched = Object.keys(ktcTags).find(k => k.toLowerCase() === lower);
+            if (matched) resolvedKho = matched;
+          }
+
+          if (ktcTags.hasOwnProperty(resolvedKho)) {
+            ktcTags[resolvedKho] = call.args.tag;
             await db.setSetting('ktc_tags', ktcTags);
-            apiResponse = { status: "Thành công", message: `Đã cập nhật quản lý kho ${kho} thành ${call.args.tag}` };
+            apiResponse = { status: "Thành công", message: `Đã cập nhật quản lý kho ${resolvedKho} thành ${call.args.tag}` };
           } else {
-            apiResponse = { status: "Thất bại", message: `Không tìm thấy mã kho: ${kho}` };
+            apiResponse = { status: "Thất bại", message: `Không tìm thấy mã kho: ${rawKho}` };
           }
         }
         else if (call.name === "addTask") {

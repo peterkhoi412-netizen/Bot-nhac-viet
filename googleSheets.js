@@ -12,7 +12,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       'DX': '@DatPham_2033074',
       'HY': '@thuychu_14',
       'XA': '@PhatDao_HRBP',
-      'M12': '@ThuHa_HRBP',
+      'HCM20': '@ThuHa_HRBP',
+      'Tân Kim': '@ThuHa_HRBP',
       'Cụm KCT MB': '@DatPham_2033074',
       'Sóng Thần': '@ThuHa_HRBP'
     };
@@ -21,6 +22,13 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     if (!ktcTags || typeof ktcTags !== 'object') {
       ktcTags = { ...defaultTags };
     } else {
+      if (ktcTags['M12'] && !ktcTags['HCM20']) {
+        ktcTags['HCM20'] = ktcTags['M12'];
+        delete ktcTags['M12'];
+      }
+      if (!ktcTags['Tân Kim']) {
+        ktcTags['Tân Kim'] = '@ThuHa_HRBP';
+      }
       ktcTags = { ...defaultTags, ...ktcTags };
     }
 
@@ -163,7 +171,8 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
       if (ktcTags.hasOwnProperty(s)) return s;
       
       const lower = s.toLowerCase();
-      if (lower.startsWith('m12') || lower.includes('m12')) return 'M12';
+      if (lower.startsWith('hcm20') || lower.includes('hcm 20') || lower.startsWith('m12') || lower.includes('m12')) return 'HCM20';
+      if (lower === 'tân kim' || lower.includes('tân kim') || lower.includes('tan kim') || lower === 'tk') return 'Tân Kim';
       if (lower === 'dt' || lower.startsWith('dt ') || lower.includes('đài tư') || lower.includes('dai tu')) return 'DT';
       if (lower === 'dx' || lower.startsWith('dx ') || lower.includes('dương xá') || lower.includes('duong xa')) return 'DX';
       if (lower === 'hy' || lower.startsWith('hy ') || lower.includes('hưng yên') || lower.includes('hung yen')) return 'HY';
@@ -217,7 +226,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
             });
           }
         } else {
-          // Đối với 5 kho cũ (DT, DX, HY, XA, M12):
+          // Đối với các kho hàng ngày (DT, DX, HY, XA, HCM20, Tân Kim):
           const cellValue = (row[todayColIndex] || '').toString().trim();
           const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
           
