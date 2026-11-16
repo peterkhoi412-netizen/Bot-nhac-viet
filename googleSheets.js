@@ -155,7 +155,7 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
     };
     const isTargetDateHoliday = checkIsHoliday(displayTargetDate) || checkIsHoliday(prevDateStr);
 
-    const noAnomalyHubs = ['Cụm KCT MB', 'Sóng Thần'];
+    const noAnomalyHubs = ['Cụm KCT MB', 'Sóng Thần', 'Tân Kim'];
 
     let missingHubs = [];
     let anomalyHubs = [];
@@ -194,19 +194,31 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
         const errorValues = ['0', '#DIV/0!', '#N/A', '0%', '-', '—'];
 
         if (isNoAnomalyHub) {
-          // Đối với Cụm KCT MB & Sóng Thần: Quét liên tục từ 01/09/2026 đến ngày hôm qua (todayColIndex)
-          let sept1ColIndex = -1;
-          for (let col = 1; col <= todayColIndex; col++) {
-            const val = (dateRow[col] || '').trim();
-            if (val === '9/1/2026' || val === '09/01/2026' || val === '09/1/2026' || val === '9/01/2026') {
-              sept1ColIndex = col;
-              break;
+          // Đối với Cụm KCT MB & Sóng Thần: Quét từ 01/09/2026 đến ngày hôm qua
+          // Đối với Tân Kim (kho mới): Quét từ 24/10/2026 (ngày bắt đầu tách kho) đến ngày hôm qua
+          let startScanCol = -1;
+          if (khoName === 'Tân Kim') {
+            for (let col = 1; col <= todayColIndex; col++) {
+              const val = (dateRow[col] || '').trim();
+              if (val === '10/24/2026' || val === '24/10/2026' || val === '10/24/26') {
+                startScanCol = col;
+                break;
+              }
             }
+            if (startScanCol === -1) startScanCol = Math.max(1, todayColIndex - 30);
+          } else {
+            for (let col = 1; col <= todayColIndex; col++) {
+              const val = (dateRow[col] || '').trim();
+              if (val === '9/1/2026' || val === '09/01/2026' || val === '09/1/2026' || val === '9/01/2026') {
+                startScanCol = col;
+                break;
+              }
+            }
+            if (startScanCol === -1) startScanCol = Math.max(1, todayColIndex - 60);
           }
-          if (sept1ColIndex === -1) sept1ColIndex = Math.max(1, todayColIndex - 60);
 
           let missingDates = [];
-          for (let col = sept1ColIndex; col <= todayColIndex; col++) {
+          for (let col = startScanCol; col <= todayColIndex; col++) {
             const colDateRaw = (dateRow[col] || '').toString().trim();
             const valStr = (row[col] || '').toString().trim();
             const nextValStr = (rows[i + 1] ? rows[i + 1][col] : '').toString().trim();
@@ -225,8 +237,34 @@ const checkKTCData = async (bot, db, ctx = null, isForAI = false, requestedDateS
               missingDates: missingDates
             });
           }
+
+          // Ghi nhận số liệu ngày hôm nay vào allHubsData nếu có để phục vụ tra cứu số liệu (nhưng KHÔNG đưa vào anomalyHubs)
+          const cellValue = (row[todayColIndex] || '').toString().trim();
+          const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
+          const cleanCurrent = cellValue.replace(/[^0-9.-]+/g, "");
+          const cleanPrev = prevValue.replace(/[^0-9.-]+/g, "");
+          const currentNum = parseFloat(cleanCurrent);
+          const prevNum = parseFloat(cleanPrev);
+
+          if (!isNaN(currentNum) && !isNaN(prevNum)) {
+            let diffPercent = 0;
+            if (prevNum === 0 && currentNum === 0) {
+              diffPercent = 0;
+            } else if (prevNum === 0 || currentNum === 0) {
+              diffPercent = 100;
+            } else {
+              diffPercent = (Math.max(currentNum, prevNum) / Math.min(currentNum, prevNum) - 1) * 100;
+            }
+            allHubsData.push({
+              name: khoName,
+              tag: ktcTags[khoName],
+              cost_hom_nay: currentNum,
+              cost_hom_qua: prevNum,
+              diff_percent: Math.round(diffPercent)
+            });
+          }
         } else {
-          // Đối với các kho hàng ngày (DT, DX, HY, XA, HCM20, Tân Kim):
+          // Đối với các kho hàng ngày (DT, DX, HY, XA, HCM20):
           const cellValue = (row[todayColIndex] || '').toString().trim();
           const prevValue = todayColIndex > 0 ? (row[todayColIndex - 1] || '').toString().trim() : '';
           
